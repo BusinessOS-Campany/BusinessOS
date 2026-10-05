@@ -15,7 +15,12 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { hasSystemSource, listSystemSources, systemSourceDir } from "@/core/org-vault/system-sources";
+import {
+  hasSystemSource,
+  listSystemSources,
+  systemSessionCookie,
+  systemSourceDir,
+} from "@/core/org-vault/system-sources";
 import { installableCardIds } from "@/core/systems/catalog";
 
 const REPO_ROOT = join(__dirname, "..", "..");
@@ -57,5 +62,39 @@ describe("deployed system sources", () => {
     // in `demo-systems/` so the marketplace can open it with no approval at all.
     expect(existsSync(join(REPO_ROOT, "demo-systems", "dental", "package.json"))).toBe(true);
     expect(existsSync(join(REPO_ROOT, "demo-systems", "grocery", "package.json"))).toBe(true);
+  });
+});
+
+/**
+ * The cookie each system issues its own session under.
+ *
+ * The platform's runtime proxy has to know this name in two places: to decide
+ * whether a caller already holds a session for this system, and to hand the
+ * freshly minted cookie upstream on the very request that created it. Both were
+ * written against grocery's literal `gs_session`, which is why a second system
+ * breaks: the browser carries `dc_session`, the guard never sees it, and the
+ * session is merged into the upstream request under a name the system does not
+ * read — so a mounted dental clone redirects to its own login forever.
+ *
+ * Read from each system's own `SESSION_COOKIE` declaration rather than a table in
+ * the platform, so adding a system does not mean remembering to edit the proxy.
+ */
+describe("system session cookies", () => {
+  it("reads grocery's cookie name from its own source", () => {
+    expect(systemSessionCookie("grocery")).toBe("gs_session");
+  });
+
+  it("reads dental's cookie name from its own source, not grocery's", () => {
+    expect(systemSessionCookie("dental")).toBe("dc_session");
+  });
+
+  it("gives a name for every system that can be run, so none falls back to a guess", () => {
+    for (const slug of listSystemSources()) {
+      expect(systemSessionCookie(slug), slug).toMatch(/^[A-Za-z0-9_-]+$/);
+    }
+  });
+
+  it("returns null for a system that does not exist rather than guessing", () => {
+    expect(systemSessionCookie("no-such-system")).toBeNull();
   });
 });

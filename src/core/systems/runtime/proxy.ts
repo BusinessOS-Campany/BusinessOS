@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { sharedPrisma } from "@/core/db/client";
 import { getVaultEntry } from "@/core/org-vault/registry";
+import { systemSessionCookie } from "@/core/org-vault/system-sources";
 import { ensureOrgRuntime, stopOrgRuntime } from "./supervisor";
 import { orgSystemPath, systemUpstreamUrl } from "./urls";
-import { isSystemLoginRedirect } from "./cookies";
+import { isSystemLoginRedirect, parseSetCookie } from "./cookies";
 import { issueOrgToken } from "./org-token";
 import { listCredentialsForInstall, markCredentialsSynced } from "@/core/systems/credentials";
 import { getEnv } from "@/core/config/env";
@@ -205,6 +206,10 @@ export async function proxySystemRequest(
   // the cookie the system issues. After that the browser carries it itself.
   const setCookies: string[] = [];
   const browserCookies = request.headers.get("cookie") ?? "";
+  // The system's own cookie name, read from the system rather than assumed. An
+  // earlier version tested for grocery's literal `gs_session`, which meant a dental
+  // clone never satisfied the guard below and re-linked on every request.
+  const sessionCookie = systemSessionCookie(systemSlug);
   // One link per request, shared by both paths below: the up-front one and the
   // retry. Linking twice would mint two sessions for one page load.
   let linkedSession: string | null = null;
@@ -213,7 +218,7 @@ export async function proxySystemRequest(
     // before the link call so the digest rides along on the request that creates
     // their account, instead of needing a second visit.
     const digest = await pendingDigestFor(scope.organizationId, install.appId, userId);
-    const linked = await linkSession(runtime, token, browserCookies, digest);
+    const linked = await linkSession(runtime, token, browserCookies, digest, sessionCookie);
     if (linked.setCookie && linked.sessionValue) {
       setCookies.push(linked.setCookie);
       linkedSession = linked.sessionValue;
@@ -226,7 +231,10 @@ export async function proxySystemRequest(
     }
   };
 
-  if (!/\bgs_session=/.test(browserCookies)) {
+  // The system's own cookie name, read from the system rather than assumed. An
+  // earlier version tested for grocery's literal `gs_session`, which meant a
+  // dental clone never satisfied this guard and re-linked on every request.
+  if (!carriesSessionCookie(browserCookies, sessionCookie)) {
     await link();
   }
   headers.set("cookie", linkedSession ? mergeCookie(browserCookies, linkedSession) : browserCookies);
@@ -382,6 +390,7 @@ async function linkSession(
   token: string,
   browserCookies: string,
   passwordHash?: { username: string; passwordHash: string } | null,
+  sessionCookie: string | null = null,
 ): Promise<{ setCookie: string | null; sessionValue: string | null; mirrored: boolean }> {
   const failed = { setCookie: null, sessionValue: null, mirrored: false } as const;
   try {
@@ -398,13 +407,12 @@ async function linkSession(
     if (!response.ok) return failed;
 
     const setCookie = response.headers.get("set-cookie");
-    const match = setCookie ? /(?:^|;\s*)gs_session=([^;]*)/.exec(setCookie) : null;
     // The clone's own answer, not our assumption: it reports whether it stored
     // the digest, so a clone that rejected it does not get marked as synced.
     const body = (await response.json().catch(() => null)) as { passwordMirrored?: boolean } | null;
     return {
       setCookie,
-      sessionValue: match?.[1] ? `gs_session=${match[1]}` : null,
+      sessionValue: sessionCookieFromSetCookie(setCookie, sessionCookie),
       mirrored: body?.passwordMirrored === true,
     };
   } catch {
@@ -414,6 +422,56 @@ async function linkSession(
 
 function mergeCookie(existing: string, addition: string): string {
   return existing ? `${existing}; ${addition}` : addition;
+}
+
+/** Escapes a cookie name for use inside a RegExp. */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Whether the caller already holds a session for the system being proxied.
+ *
+ * Matched on a cookie boundary rather than a substring, so `x_dc_session` does
+ * not read as a `dc_session`. A null name means the system declares no cookie, and
+ * the answer is false: the link route is idempotent, whereas skipping it on a
+ * guess would strand the member at a login page.
+ */
+export function carriesSessionCookie(browserCookies: string, name: string | null): boolean {
+  if (!name) return false;
+  return new RegExp(`(?:^|;\\s*)${escapeRegExp(name)}=`).test(browserCookies);
+}
+
+/**
+ * The `name=value` pair to hand upstream from a `Set-Cookie` the system returned,
+ * or null when there is nothing worth replaying.
+ *
+ * Read out of the header the system itself sent, which is the only party that knows
+ * the name: this used to rebuild grocery's `gs_session` unconditionally, so a dental
+ * clone's session was merged into the forwarded request under a name its own
+ * `session.ts` never reads and every load bounced to its login page.
+ *
+ * Selected *by name* rather than taken as the first cookie, because a link route is
+ * free to set more than one and the platform only ever wants the session. Taking the
+ * first would be a silent behaviour change for grocery the day it adds a second
+ * cookie — the one system whose behaviour must not move.
+ *
+ * A deletion yields null. Replaying `name=` upstream would look like a session
+ * cookie that exists and is empty, which is the failure `cookies.ts` documents at
+ * length for the grocery case.
+ */
+export function sessionCookieFromSetCookie(
+  setCookie: string | null,
+  name: string | null,
+): string | null {
+  if (!setCookie || !name) return null;
+  for (const one of splitSetCookieHeader(setCookie)) {
+    const parsed = parseSetCookie(one);
+    if (parsed && !parsed.remove && parsed.value && parsed.name === name) {
+      return `${parsed.name}=${parsed.value}`;
+    }
+  }
+  return null;
 }
 
 /** Stops an org's runtime. Used by the uninstall path so the process does not linger. */

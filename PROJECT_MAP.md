@@ -554,18 +554,149 @@ other 172 systems were not affected.
 - **Build only against a stopped server.** The platform being down is what made rebuilding
   `.next` safe here. See the 2026-09 `.next`-rewritten-under-a-live-server entry.
 
+### M3 — `system/dental` is now a runnable, platform-mountable system (implemented, verified)
+
+`systemContract("dental").missing` went from four items to none. Dental can now be cloned per
+org, built for that org's mount, started by the supervisor, health-checked and signed into —
+the last of those with a real SSO relay rather than a stub.
+
+- **`next.config.ts` reads `SYSTEM_BASE_PATH`, defaulting to `/dental`.** `basePath` is compiled
+  in at build time, so the supervisor sets the variable for the child's build *and* its start.
+  `turbopack.root` is pinned to the app folder for the same reason as in the demo copy.
+- **`package.json` build is `prisma generate && node --max-old-space-size=16384 … next build --webpack`.**
+  Plain `next build` here is Turbopack, which is both the workspace-root leak and the OOM
+  already proven on grocery.
+- **`src/app/api/health/route.ts`** answers without touching the database, like grocery's:
+  "the process booted" is not the same question as "the data is reachable".
+- **`src/app/api/bos/link/route.ts`** verifies the platform's `x-bos-gateway-token` (HMAC,
+  constant-time compare, expiry, and `BOS_ORG_ID` so one org's token cannot be replayed into
+  another's process), maps the platform role to a dental `Role.key`, upserts the local user and
+  issues `dc_session`.
+- **`prisma/bootstrap.ts`** creates the ten system roles from `ROLE_DEFINITIONS` in
+  `src/lib/permissions.ts` and creates no users. It is deliberately not `seed.ts`, which would
+  install a shared-password admin and a cast of fictional patients into a customer's database.
+  It only fills a role's permissions when the stored list is **empty**, so an org that has
+  trimmed a role keeps its own version.
+
+**Dental is not a copy of grocery, and none of this was copied blindly.** Grocery has
+`db.role`/`rolePermission` with a join table, `User.deletedAt` + `status` +
+`mustChangePassword`, and server-side sessions. Dental has `Role.key` with `permissions
+String[]`, a `User` with `isActive` and no soft delete, and a **stateless JWT** in
+`dc_session` (`src/lib/session.ts`). The link route therefore verifies against `isActive`,
+resolves the role by `key`, and hands the session to `setSessionCookie`. Grocery has no
+read-only role, so `member`/`cashier`/`viewer` all map to `RECEPTIONIST`, the least-privileged
+key the app defines.
+
+**Verified:** `systemContract("dental").missing` is empty · `npx tsc --noEmit` clean inside
+`system/dental` · eslint clean on all four new/changed files · `npm run build` in
+`system/dental` → `✓ Compiled successfully` with **no** workspace-root warning · bootstrap run
+twice against the live `demo.dental` schema → `roles=10 created=none permissionsFilled=none`
+both times, i.e. it finds the seeded roles, creates nothing and is idempotent · **built with
+`SYSTEM_BASE_PATH=/gm/dental` and served**: `/gm/dental/api/health` → `200
+{"ok":true,"system":"dental","org":"gm"}`, `/gm/dental/login` → `200` (the real Arabic RTL
+login page, which lives at `src/app/(auth)/login/page.tsx`, not `src/app/login/page.tsx`),
+`/api/health` → `404` and `/dental/api/health` → `404` (correctly not served outside the
+mount), `POST /gm/dental/api/bos/link` with no `BOS_GATEWAY_SECRET` → `501`.
+
+One trap worth recording: **`basePath` is read at build time *and* at start time.** A first
+verification attempt built with `SYSTEM_BASE_PATH=/gm/dental` but started without it; the server
+fell back to `/dental` and every request under the org mount 404'd, which reads exactly like a
+missing route. The supervisor already sets the variable for both phases; anything that starts
+one of these processes by hand has to as well.
+
+### M4 — the SSO relay is now per-system instead of grocery-only (implemented, verified)
+
+A mounted clone could never hold a session of its own. The proxy asked two questions and both
+were written against grocery's literal `gs_session`: *"does the caller already hold a session for
+this system?"* and *"what is the cookie the system just minted?"*. Grocery answered both. Dental
+answered neither, and the failure mode was silent — the browser held a perfectly good `dc_session`,
+the guard disagreed, so the platform re-linked on **every** request and merged that session
+upstream under a name dental's `session.ts` never reads. A mounted dental clone therefore bounced
+to its own login page forever, while the platform looked healthy.
+
+- **`systemSessionCookie(systemSlug)` reads the name out of the system instead of a table in the
+  platform** (`src/core/org-vault/system-sources.ts`). Dental declares
+  `export const SESSION_COOKIE = "dc_session"` and grocery declares
+  `const SESSION_COOKIE = "gs_session"`, in *different files*, so the declaration is found by
+  shape — four likely paths, then a walk of `src/` — rather than by filename. Adding a third
+  system must not mean remembering to edit the proxy. Returns `null` for a system that declares
+  none, which is a real answer and not a fallback to `gs_session`. Memoised, because the proxy
+  asks per request and this hits the filesystem; a stale entry self-heals on platform restart,
+  which is the same window in which a rebuilt system is picked up anyway.
+- **`carriesSessionCookie(jar, name)` matches on a cookie boundary**, so `x_dc_session` is not read
+  as a `dc_session`. A `null` name answers *false*: the link route is idempotent, so re-linking is
+  cheap, whereas skipping the link on a guess would strand a member at a login page. That is the
+  safe direction for a check whose failure mode is a loop.
+- **`sessionCookieFromSetCookie(setCookie, name)` reads the `name=value` the system itself sent**,
+  via the `parseSetCookie`/`splitSetCookieHeader` pair that `cookies.ts` already had, replacing a
+  regex that rebuilt grocery's name. Selected **by name rather than taken as the first cookie**,
+  because a link route is free to set more than one and the platform only wants the session —
+  taking the first would silently change grocery's behaviour the day it adds a second cookie. A
+  deletion (`name=`, or `Expires` in the past) yields `null`: replaying `gs_session=` upstream is
+  precisely the "looks like a session exists but is empty" failure that `cookies.ts` documents at
+  length.
+
+**Two further bugs surfaced by the tests rather than by reading the code**, both worth more than
+the change that prompted them:
+
+- **Taking the first cookie instead of the named one** was mine, caught before it shipped by the
+  differential test below: for a header carrying some other cookie it returned that cookie, where
+  the old code returned nothing. Had grocery's link route ever set a second cookie, the platform
+  would have started forwarding the wrong pair upstream.
+- **The old regex could not find `gs_session` unless it came first or followed a `;`.** The Headers
+  API joins multiple `Set-Cookie` values with `", "`, so the day a grocery link route set a second
+  cookie the session was silently dropped — the same class of fault as the hardcoded name, and
+  latent in the one system that currently works. So "grocery is unaffected" is true for every
+  single-cookie header and provably so, but not for multi-cookie ones, where the new code is
+  strictly better.
+
+The grocery guarantee is stated as an executable claim rather than an assurance: one test replays
+the **old expression verbatim** over every single-cookie grocery header, a deletion, a foreign
+cookie, empty and null, and asserts the new helper returns the identical value in every case. A
+second test names the one intentional divergence. `systemSessionCookie("grocery")` returning
+`"gs_session"` — byte-identical to the literal it replaced — is asserted directly, and confirmed
+again by running the resolver against the real trees (`dental → dc_session`, `grocery → gs_session`,
+unknown → `null`).
+
+Tests first: both suites failed 12 times before the change and pass after — 4 on cookie discovery
+(grocery, dental, *every* runnable system gets a syntactically valid name, unknown slug gets
+`null`) and 9 on the proxy helpers, including the two negative cases that matter most (`gs_session`
+present while serving dental is **not** a dental session, and a deletion is not replayed). Suite is
+**703/703 across 53 files**; typecheck clean; eslint clean on the touched files with the repo
+baseline unchanged at 28 errors / 57 warnings.
+
+**What is still not proven:** the authenticated round trip. No org has a Dental install yet, so the
+mounted-clone session loop could not be exercised over HTTP, and `gm`'s real Grocery at
+`/app/grocery` returns a correct `401` but its owner's password is not available in this session, so
+the grocery relay was not driven live either. Routes confirmed after deploy: `/demo` `200`,
+`/demo/dental` → `200` at `/demo/dental/login`, `/demo/dental/login` `200`, `/demo/grocery` `200`,
+`/dental` `308` → `/demo/dental`, `/app/grocery` `401` (auth gate intact). A true mounted session
+round trip belongs to M6.
+
+**Correction to the record:** two findings written down while wiring the demo were wrong and are
+withdrawn above — that `gs_session`/`dc_session` collide on `Path=/` (different names, so they
+coexist), and that `DATABASE_SCHEMA: "public"` makes per-org isolation inert (isolation is one
+database per org, and `public` is correct for a fresh one). The cookie finding was half-right in
+the worst way: the collision was imaginary, the hardcoded name was real, and fixing the imaginary
+one would have left the actual outage untouched.
+
 ---
 
 ## [ORPHANS & PENDING]
 
 Everything below is NOT YET IMPLEMENTED. Updated continuously; entries removed only when their milestone's verifiable goals pass.
 
-### Found while wiring the dental demo on 2026-10-05 — M3–M6 of the dental rollout, not started
-- **`system/dental` still cannot be served by the runtime: 4 of 8 contract items are missing.** `systemContract("dental").missing` = `reads SYSTEM_BASE_PATH in its build config`, `src/app/api/health/route.ts`, `src/app/api/bos/link/route.ts`, `prisma/bootstrap.ts`. `src/app/[org]/[system]/route.ts` and `[...path]/route.ts` gate on `listSystemSources().includes(system)` — and `dental` now **is** in that list, so the route exists and will 404/500 at the proxy rather than refusing cleanly. A system is listed, clonable and routed while being unrunnable; `src/core/apps/service.ts:409` is the only caller that checks the contract. **Goal: `systemContract("dental").missing` is empty.**
-- **`system/dental` would build with plain `next build` (Turbopack), which is the workspace-root leak and the OOM already proven on grocery.** `package.json` has `"build": "next build"`; grocery's is `prisma generate && next build --webpack` under a 16 GB heap via a launcher script. `next.config.ts` also pins `turbopack.root` in both demo copies — added for dental — precisely because a nested app otherwise walks up and infers the ERP as the workspace root. **Goal: the build log contains no workspace-root warning and completes under the documented heap.**
+### Found while wiring the dental demo on 2026-10-05 — M3 and M4 done, M5–M6 open
+
+- ~~**`system/dental` still cannot be served by the runtime: 4 of 8 contract items are missing.**~~ **RESOLVED 2026-10-05 (M3):** `systemContract("dental").missing` is empty. See the M3 entry above; the gap was `SYSTEM_BASE_PATH`, `api/health`, `api/bos/link` and `prisma/bootstrap.ts`.
+- ~~**`system/dental` would build with plain `next build` (Turbopack)…**~~ **RESOLVED 2026-10-05 (M3):** the build script is `prisma generate && next build --webpack` under a 16 GB heap, and `turbopack.root` is pinned. Verified by building: `✓ Compiled successfully`, **no workspace-root warning**. The pin was genuinely load-bearing — the first M3 build still emitted `⚠ Next.js inferred your workspace root` because the config was rewritten without it, and only the rebuild after adding it came back clean.
 - **`UPLOAD_DIR` is never injected, so every org would share one imaging folder.** `src/lib/storage.ts` reads `process.env.UPLOAD_DIR` and falls back to a shared `serverdata/uploads`; the supervisor builds each org's env and sets no `UPLOAD_DIR`. Dental is the worst case of the systems shipped so far — it has an `imaging` module and a `src/app/api/files/[...path]/route.ts` that serves files by path. **Goal: two orgs' imaging files land in different directories and neither can read the other's through `/api/files/…`.**
-- **`dc_session` is a second session cookie on the same `Path=/` as `gs_session`.** Dental's `src/lib/session.ts` defines `dc_session`; the platform uses `gs_session`. Same path scope, so the two overwrite each other in the browser and logging into a mounted dental clone can drop the platform session. This is the `gs_session` collision already recorded for grocery, now reachable by a second system. **Goal: a signed-in member can move between the platform and a mounted system without either session being destroyed.**
-- **The demo and the real system are two byte-identical copies and will drift, exactly like grocery.** `demo-systems/dental` and `system/dental` matched file-for-file when they were placed (217 files, 67 models/enums, 28 pages, identical `schema.prisma` hash) but **have since diverged**: `demo-systems/dental/next.config.ts` now carries `basePath: "/demo/dental"` while the real one does not, so the trees can no longer be synced wholesale. The `DATABASE_SCHEMA` fix applied today had to be written twice, by hand, for this reason. **Goal: the relationship between the two trees is declared somewhere a reader can find it.**
+- ~~**`dc_session` is a second session cookie on the same `Path=/` as `gs_session`…**~~ **WITHDRAWN 2026-10-05, the finding was wrong.** Two cookies overwrite each other only when name, domain and path all match, and `gs_session` and `dc_session` are different names — they coexist happily on `Path=/`. Nothing destroys either platform session. What *is* real is worse and was found while fixing this: the runtime proxy hardcoded grocery's name in two places, so a mounted dental clone could never hold a session at all. See the M4 entry above.
+- **The demo and the real system are two copies and will drift, exactly like grocery — but they are not, and cannot be, the same upstream.** `demo-systems/dental` and `system/dental` matched file-for-file when they were placed (217 files, 67 models/enums, 28 pages, identical `schema.prisma` hash) and have now diverged. The decisive fact, found while making the first commit: **both trees are clones of `github.com/gmsnow/dental-Clinic-`** (4 commits, HEAD `b560a27`), not directories this repo authored. A submodule is therefore the wrong instrument — the `basePath`, `SYSTEM_BASE_PATH`, `DATABASE_SCHEMA`, health, link and bootstrap changes are our fork and could never be pushed to the vendor remote, so a fresh clone would get unpatched dental. The nested `.git` directories were renamed to `.git.vendor-backup` (reversible, gitignored) so the platform repo owns the fork and the vendor commits stay recoverable. **Goal: the relationship between the two trees, and the upstream they came from, is declared somewhere a reader can find it.**
+
+### Corrected while implementing M4 on 2026-10-05 — `DATABASE_SCHEMA: "public"` is correct, not a defect
+- ~~**`supervisor.ts:442` hardcodes `DATABASE_SCHEMA: "public"` into every org process, so the tenant-schema isolation is inert.**~~ **WITHDRAWN 2026-10-05 — the premise was wrong.** Isolation here is **one PostgreSQL DATABASE per org**, not one schema per org: `ensureOrgDatabase()` runs `CREATE DATABASE org_<folder>` (`src/core/org-vault/database.ts:99`) and `orgDatabaseUrl()` swaps the path component and **deletes `?schema=`** on the way (`:46`). So the child's database is brand new, its tables are created by that system's own migrations, and `public` is the only schema guaranteed to exist — which is precisely what the comment at `:43-46` already said. The dental runtime and seed reading `DATABASE_SCHEMA` is correct and load-bearing for the *demo*, which does share the `demo` database and genuinely needs `dental`; it is simply overridden to `public` for a per-org clone, correctly. Recorded here because the wrong version of this was written down first, and because "verify the isolation model before calling something a leak" is the lesson.
+- **UNRELATED FLAKE, observed while verifying M4 on 2026-10-05, not fixed.** One full-suite run failed 2 of `tests/core/m6-workflows.test.ts` (`M6.1 … creates exactly one notification`, `M6.2 … no matching endpoint`) with `No record was found for an update`. The file passes 14/14 in isolation and the suite then passed 697/697 four times running. Ruled out as a regression by stashing the M4 changes and re-running the suite clean at 685/685, so it is shared-database state left behind by an earlier run or a parallel worker rather than a code fault — but that is a conclusion drawn from passing runs, not a diagnosed cause. **Goal: `m6-workflows` seeds and cleans its own rows so its result does not depend on what ran before it, and a failing suite is explained before it is merely re-run.**
 
 ### Found while fixing slow platform-admin navigation on 2026-10-03 — RESOLVED 2026-10-05 where noted
 - **`pathSize` counts `node_modules`, so the folder size it reports is not the org's data.** `orginazition/gm` measures 1.94 GB, of which the overwhelming majority is `systems/grocery/node_modules` — a shared install that is not the tenant's data and is not what an operator asking "how big is this org's vault" means. The walk is also 36 s for twelve orgs, which is why it is off the request path now, but `scripts/org-vault.ts status --all` still pays it and `manifest.json`'s `vault.sizeBytes` (`manifest.ts:204`, written on provisioning) still publishes the misleading figure. **Goal: the folder size counts the org's own files and skips `node_modules`/`.next`, or is derived from the registry rather than a walk.**

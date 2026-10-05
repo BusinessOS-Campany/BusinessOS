@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from "node:fs";
 import { join } from "node:path";
 import { systemSourceRoot } from "./paths";
 
@@ -164,4 +164,86 @@ export function systemContract(systemSlug: string): SystemContract {
 /** The contract for every system currently on disk. */
 export function allSystemContracts(): SystemContract[] {
   return listSystemSources().map(systemContract);
+}
+
+/**
+ * `SESSION_COOKIE = "…"` as a system declares it.
+ *
+ * Grocery writes `const SESSION_COOKIE = "gs_session"` and dental writes
+ * `export const SESSION_COOKIE = "dc_session"`, so the declaration is found by
+ * shape rather than by a filename: the two systems keep it in different files and
+ * a third will not keep it in either.
+ */
+const SESSION_COOKIE_DECLARATION = /\bSESSION_COOKIE\s*(?::[^=]+)?=\s*["']([A-Za-z0-9_-]+)["']/;
+
+/** Source files worth reading before walking a whole tree. */
+const SESSION_COOKIE_LIKELY = [
+  join("src", "lib", "session.ts"),
+  join("src", "lib", "auth.ts"),
+  join("src", "features", "auth", "session.ts"),
+  join("src", "lib", "session", "index.ts"),
+];
+
+function readIfPresent(file: string): string | null {
+  try {
+    return readFileSync(file, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+function findSessionCookie(dir: string): string | null {
+  for (const relative of SESSION_COOKIE_LIKELY) {
+    const match = SESSION_COOKIE_DECLARATION.exec(readIfPresent(join(dir, relative)) ?? "");
+    if (match) return match[1];
+  }
+
+  // Nothing in the usual places. Walk `src` rather than give up: a system that
+  // names its cookie somewhere else should still work, and a wrong guess here
+  // strands a real user at a login loop.
+  const stack = [join(dir, "src")];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (/\.tsx?$/.test(entry.name)) {
+        const match = SESSION_COOKIE_DECLARATION.exec(readIfPresent(full) ?? "");
+        if (match) return match[1];
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * The cookie a system issues its own session under, or null if it declares none.
+ *
+ * The runtime proxy needs this in two places, and guessing wrong in either is
+ * user-visible: it decides whether a caller already holds a session for this
+ * system, and it names the cookie to hand upstream on the request that mints
+ * one. Both used to be grocery's literal `gs_session`, which left a second system
+ * re-linking on every request with its session merged under a name it never
+ * reads.
+ *
+ * Memoised because the proxy asks per request and this walks the filesystem. A
+ * stale entry after editing a system's session module is repaired by restarting
+ * the platform, which is the same window in which a rebuilt system is picked up
+ * anyway.
+ */
+const sessionCookieCache = new Map<string, string | null>();
+
+export function systemSessionCookie(systemSlug: string): string | null {
+  const cached = sessionCookieCache.get(systemSlug);
+  if (cached !== undefined) return cached;
+  const found = findSessionCookie(systemSourceDir(systemSlug));
+  sessionCookieCache.set(systemSlug, found);
+  return found;
 }
