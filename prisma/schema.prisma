@@ -1,0 +1,1610 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/core/db/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model user {
+  id                                            String                      @id
+  name                                          String
+  /// Nullable so a user can register with a phone number instead. Both
+  /// identifiers are unique independently, and exactly one of them is required
+  /// (enforced in the signup route, not by the database).
+  email                                         String?                     @unique
+  emailVerified                                 Boolean                     @default(false) @map("email_verified")
+  image                                         String?
+  createdAt                                     DateTime                    @default(now()) @map("created_at")
+  updatedAt                                     DateTime                    @updatedAt @map("updated_at")
+  banReason                                     String?                     @map("ban_reason")
+  banned                                        Boolean                     @default(false)
+  /// Better Auth admin-plugin realm: platform owner vs normal user.
+  /// Tenant roles live in member.role — this is ONLY for the platform console.
+  role                                          String                      @default("user")
+  /// Public @handle shown on the profile. Optional, unique, and normalised to
+  /// lower case by the API. NOT a login identifier: sign-in is email-or-phone
+  /// only (see core/auth/identifier.ts). There is no public profile page, so
+  /// this is a display handle, not an address.
+  username                                      String?                     @unique
+  /// Profile banner. Same-origin API path (like `image`) or an absolute https
+  /// URL; the API validates which. Null falls back to a generated gradient.
+  coverImage                                    String?                     @map("cover_image")
+  bio                                           String?
+  /// E.164-ish national number, stored WITHOUT the country dial code; the
+  /// dial code lives in `countryCode` so the two can be changed independently.
+  /// Unique so a phone number identifies exactly one account.
+  phone                                         String?                     @unique
+  /// ISO 3166-1 alpha-2 dial-code country the phone was entered against,
+  /// e.g. "YE" for +967. Set only for phone registrations.
+  countryCode                                   String?                     @map("country_code")
+  locale                                        String                      @default("ar")
+  preferences                                   Json?
+  privacy                                       Json?
+  profileExtras                                 Json?                                 @map("profile_extras")
+  socials                                       Json?
+  accounts                                      account[]
+  members                                       member[]
+  sessions                                      session[]
+  following                                     userFollow[]                @relation("UserFollowsFollowing")
+  followers                                     userFollow[]                @relation("UserFollowsFollower")
+  orgAppRequests                                organizationAppRequest[]    @relation("OrgAppRequestRequester")
+  pinned                                        pinnedApp[]                 @relation("UserPinnedSystems")
+  systemCredentials                             systemCredential[]          @relation("UserSystemCredentials")
+
+  @@map("users")
+}
+
+model session {
+  id                   String   @id
+  expiresAt            DateTime @map("expires_at")
+  token                String   @unique
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  ipAddress            String?  @map("ip_address")
+  userAgent            String?  @map("user_agent")
+  userId               String   @map("user_id")
+  activeOrganizationId String?  @map("active_organization_id")
+  /// Set while a platform admin is impersonating this session's user.
+  impersonatedBy       String?  @map("impersonated_by")
+  user                 user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([activeOrganizationId])
+  @@map("sessions")
+}
+
+model account {
+  id                    String    @id
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  userId                String    @map("user_id")
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  issuer                String?
+  user                  user      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+model organization {
+  id                        String                      @id
+  name                      String
+  slug                      String                      @unique
+  logo                      String?
+  metadata                  String?
+  createdAt                 DateTime                    @default(now()) @map("created_at")
+  planId                    String?                     @map("plan_id")
+  /// Platform-controlled lifecycle: active | suspended.
+  status                    String                      @default("active")
+  /// Tenant settings JSON: currency, tax, enabled modules, receipt config…
+  settings                  Json?
+  /// Industry template applied at provisioning (e.g. "grocery").
+  templateCode              String?                     @map("template_code")
+  schemaName                String?                     @map("schema_name")
+  databaseName              String?                     @map("database_name")
+  auditLogs                 auditLog[]
+  invitations               invitation[]
+  members                   member[]
+  orgAppRequests            organizationAppRequest[]
+  orgApps                   organizationApp[]
+  systemCredentials         systemCredential[]
+  plan                      plan?                       @relation(fields: [planId], references: [id])
+
+  @@map("organizations")
+}
+
+model plan {
+  id                String         @id @default(cuid())
+  code              String         @unique
+  nameAr            String         @map("name_ar")
+  nameEn            String         @map("name_en")
+  priceMonthlyMinor BigInt         @default(0) @map("price_monthly_minor")
+  currency          String         @default("SAR")
+  /// Plan caps: JSON like {"users":10,"branches":1,"aiCreditsPerMonth":0}
+  limits            Json
+  isActive          Boolean        @default(true) @map("is_active")
+  sortOrder         Int            @default(0) @map("sort_order")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  organizations     organization[]
+
+  @@map("plans")
+}
+
+model announcement {
+  id              String    @id @default(cuid())
+  titleAr         String    @map("title_ar")
+  titleEn         String    @map("title_en")
+  bodyAr          String    @map("body_ar")
+  bodyEn          String    @map("body_en")
+  /// all = every tenant; org = only organizationId below
+  audience        String    @default("all")
+  organizationId  String?   @map("organization_id")
+  severity        String    @default("info")
+  publishedAt     DateTime? @map("published_at")
+  createdByUserId String?   @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([audience, publishedAt])
+  @@map("announcements")
+}
+
+model member {
+  id             String       @id
+  organizationId String       @map("organization_id")
+  userId         String       @map("user_id")
+  role           String
+  createdAt      DateTime     @default(now()) @map("created_at")
+  organization   organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           user         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("members")
+}
+
+model invitation {
+  id             String       @id
+  organizationId String       @map("organization_id")
+  email          String
+  role           String
+  status         String
+  expiresAt      DateTime     @map("expires_at")
+  inviterId      String       @map("inviter_id")
+  organization   organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("invitations")
+}
+
+model auditLog {
+  id             String        @id @default(cuid())
+  /// Null for platform-realm events (impersonation, provisioning).
+  organizationId String?       @map("organization_id")
+  actorUserId    String?       @map("actor_user_id")
+  action         String
+  entityType     String        @map("entity_type")
+  entityId       String?       @map("entity_id")
+  before         Json?
+  after          Json?
+  ip             String?
+  userAgent      String?       @map("user_agent")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  organization   organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, entityType, entityId])
+  @@map("audit_logs")
+}
+
+/// Master registry of available applications on the platform.
+model app {
+  id                        String                      @id @default(cuid())
+  slug                      String                      @unique
+  name                      String
+  nameAr                    String?                     @map("name_ar")
+  description               String?
+  descriptionAr             String?                     @map("description_ar")
+  icon                      String?
+  category                  String                      @default("business")
+  /// Optional cover image URL for marketplace cards.
+  image                     String?
+  /// Database/schema identifier for the system's data (e.g. "grocery").
+  /// Null = shares the tenant's default schema (organizationId-scoped rows).
+  schemaKey                 String?                     @map("schema_key")
+  version                   String                      @default("1.0.0")
+  /// dormant | active | deprecated — platform-wide status
+  status                    String                      @default("active")
+  /// Route prefix inside the app shell (e.g. "/app/grocery")
+  routePrefix               String                      @map("route_prefix")
+  /// JSON: capability flags — { offlineSupported, syncSupported, barcodeSupported, printingSupported, cameraSupported }
+  capabilities              Json                        @default("{}")
+  /// JSON: Zod-compatible schema for app-specific configuration
+  configurationSchema       Json?                       @map("configuration_schema")
+  /// JSON: array of permission strings this app requires (e.g. ["grocery.products.view"])
+  permissions               Json                        @default("[]")
+  /// JSON: navigation items — [{name, href, icon, permission}]
+  navigation                Json                        @default("[]")
+  /// JSON: dashboard widget definitions this app provides
+  dashboardWidgets          Json?                       @map("dashboard_widgets")
+  /// JSON: AI tool definitions this app exposes
+  aiTools                   Json?                       @map("ai_tools")
+  isActive                  Boolean                     @default(true) @map("is_active")
+  createdAt                 DateTime                    @default(now()) @map("created_at")
+  updatedAt                 DateTime                    @updatedAt @map("updated_at")
+  orgAppRequests            organizationAppRequest[]
+  organizationApps          organizationApp[]
+  systemCredentials         systemCredential[]
+  pinnedBy                  pinnedApp[]
+
+  @@map("apps")
+}
+
+/// Tracks which applications each organization has installed.
+model organizationApp {
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  appId          String       @map("app_id")
+  /// installed | active | disabled | suspended
+  status         String       @default("active")
+  version        String       @default("1.0.0")
+  /// App-specific configuration override (JSON)
+  configuration  Json?
+  /// App-specific settings (JSON) — receipts, currency overrides, etc.
+  settings       Json?
+  installedAt    DateTime     @default(now()) @map("installed_at")
+  activatedAt    DateTime?    @map("activated_at")
+  disabledAt     DateTime?    @map("disabled_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  app            app          @relation(fields: [appId], references: [id], onDelete: Cascade)
+  organization   organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, appId])
+  @@index([organizationId, status])
+  @@index([appId])
+  @@map("organization_apps")
+}
+
+model category {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  parentId       String?  @map("parent_id")
+  nameAr         String   @map("name_ar")
+  nameEn         String?  @map("name_en")
+  sortOrder      Int      @default(0) @map("sort_order")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@index([parentId])
+  @@map("categories")
+}
+
+model unit {
+  /// Unit of measure. `factor` converts to the product's base unit:
+  /// qty_in_base = qty_in_this_unit * factor (piece=1, box_of_12=12…).
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  nameAr         String   @map("name_ar")
+  nameEn         String?  @map("name_en")
+  shortAr        String?  @map("short_ar")
+  shortEn        String?  @map("short_en")
+  factor         Decimal  @db.Decimal(18, 6)
+  isBase         Boolean  @default(false) @map("is_base")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@map("units")
+}
+
+model product {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  categoryId     String?  @map("category_id")
+  baseUnitId     String?  @map("base_unit_id")
+  sku            String
+  barcode        String?
+  nameAr         String   @map("name_ar")
+  nameEn         String?  @map("name_en")
+  costPrice      BigInt   @default(0) @map("cost_price")
+  salePrice      BigInt   @default(0) @map("sale_price")
+  wholesalePrice BigInt?  @map("wholesale_price")
+  taxRateBps     Int      @default(0) @map("tax_rate_bps")
+  trackStock     Boolean  @default(true) @map("track_stock")
+  /// Reorder threshold for low-stock detection (null = never flags).
+  minStock       Decimal? @map("min_stock")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, sku])
+  @@unique([organizationId, barcode])
+  @@index([organizationId, nameAr])
+  @@index([organizationId, isActive])
+  @@index([categoryId])
+  @@map("products")
+}
+
+model branch {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  nameAr         String   @map("name_ar")
+  nameEn         String?
+  phone          String?
+  address        String?
+  isMain         Boolean  @default(false) @map("is_main")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@map("branches")
+}
+
+model warehouse {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  branchId       String?  @map("branch_id")
+  nameAr         String   @map("name_ar")
+  nameEn         String?
+  isMain         Boolean  @default(false) @map("is_main")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@index([branchId])
+  @@map("warehouses")
+}
+
+model stockLevel {
+  id             String  @id @default(cuid())
+  organizationId String  @map("organization_id")
+  productId      String  @map("product_id")
+  warehouseId    String  @map("warehouse_id")
+  qty            Decimal @default(0) @db.Decimal(18, 3)
+
+  @@unique([productId, warehouseId])
+  @@index([organizationId, warehouseId])
+  @@map("stock_levels")
+}
+
+model stockMovement {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  productId       String   @map("product_id")
+  warehouseId     String   @map("warehouse_id")
+  /// Signed quantity change; ledger sum must equal stock_levels.qty.
+  qtyDelta        Decimal  @map("qty_delta") @db.Decimal(18, 3)
+  /// sale | sale_return | purchase | adjustment | transfer_out | transfer_in
+  reason          String
+  refType         String?  @map("ref_type")
+  refId           String?  @map("ref_id")
+  note            String?
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, productId, warehouseId, createdAt])
+  @@index([organizationId, refType, refId])
+  @@map("stock_movements")
+}
+
+model customer {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  phone          String?
+  email          String?
+  /// Max outstanding credit in minor units; 0 = cash-only.
+  creditLimit    BigInt   @default(0) @map("credit_limit")
+  /// Receivable balance: positive = customer owes us.
+  balance        BigInt   @default(0)
+  notes          String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, name])
+  @@index([organizationId, phone])
+  @@map("customers")
+}
+
+model supplier {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  phone          String?
+  /// Payable balance: positive = we owe supplier.
+  balance        BigInt   @default(0)
+  notes          String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, name])
+  @@map("suppliers")
+}
+
+model expenseCategory {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  nameAr         String   @map("name_ar")
+  nameEn         String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@map("expense_categories")
+}
+
+model expense {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  categoryId      String?  @map("category_id")
+  amount          BigInt
+  cashAccountId   String?  @map("cash_account_id")
+  note            String?
+  spentAt         DateTime @map("spent_at")
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, spentAt])
+  @@index([categoryId])
+  @@index([cashAccountId])
+  @@map("expenses")
+}
+
+model cashAccount {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  nameAr         String   @map("name_ar")
+  nameEn         String?
+  /// cash | bank
+  type           String   @default("cash")
+  openingBalance BigInt   @default(0) @map("opening_balance")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@map("cash_accounts")
+}
+
+model cashMovement {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  accountId       String   @map("account_id")
+  /// Signed minor-unit delta; sum + opening == account balance.
+  delta           BigInt
+  /// sale_payment | purchase_payment | expense | refund | adjustment | deposit | withdrawal
+  reason          String
+  refType         String?  @map("ref_type")
+  refId           String?  @map("ref_id")
+  note            String?
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, accountId, createdAt])
+  @@index([organizationId, refType, refId])
+  @@map("cash_movements")
+}
+
+/// Gap-tolerant document numbering, allocated inside the caller's tx.
+model numberSequence {
+  id             String  @id @default(cuid())
+  organizationId String  @map("organization_id")
+  /// sales_invoice | sales_return | purchase | expense
+  key            String
+  prefix         String?
+  nextValue      Int     @default(1) @map("next_value")
+  padding        Int     @default(5) @map("padding")
+
+  @@unique([organizationId, key])
+  @@map("number_sequences")
+}
+
+model salesInvoice {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  number          String
+  customerId      String?  @map("customer_id")
+  warehouseId     String?  @map("warehouse_id")
+  /// posted | voided
+  status          String   @default("posted")
+  issuedAt        DateTime @default(now()) @map("issued_at")
+  subtotal        BigInt
+  discountTotal   BigInt   @default(0) @map("discount_total")
+  taxTotal        BigInt   @map("tax_total")
+  total           BigInt
+  paidTotal       BigInt   @default(0) @map("paid_total")
+  notes           String?
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, number])
+  @@index([organizationId, issuedAt])
+  @@index([organizationId, customerId])
+  @@index([organizationId, warehouseId])
+  @@index([organizationId, status, issuedAt])
+  @@map("sales_invoices")
+}
+
+model salesInvoiceItem {
+  id             String  @id @default(cuid())
+  invoiceId      String  @map("invoice_id")
+  organizationId String  @map("organization_id")
+  productId      String  @map("product_id")
+  qty            Decimal @db.Decimal(18, 3)
+  unitPrice      BigInt  @map("unit_price")
+  discount       BigInt  @default(0)
+  taxRateBps     Int     @map("tax_rate_bps")
+  lineSubtotal   BigInt  @map("line_subtotal")
+  lineTax        BigInt  @map("line_tax")
+  lineTotal      BigInt  @map("line_total")
+  /// Cost snapshot at sale time → gross profit reporting without revaluation.
+  unitCost       BigInt  @default(0) @map("unit_cost")
+
+  @@index([invoiceId])
+  @@index([organizationId, productId])
+  @@map("sales_invoice_items")
+}
+
+model payment {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  invoiceId       String   @map("invoice_id")
+  /// cash | card | transfer | credit
+  method          String
+  amount          BigInt
+  cashAccountId   String?  @map("cash_account_id")
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([invoiceId])
+  @@index([organizationId, createdAt])
+  @@index([cashAccountId])
+  @@map("payments")
+}
+
+model purchase {
+  id              String    @id @default(cuid())
+  organizationId  String    @map("organization_id")
+  number          String
+  supplierId      String?   @map("supplier_id")
+  warehouseId     String?   @map("warehouse_id")
+  /// received (stock applied atomically at creation in M4; drafts land later)
+  status          String    @default("received")
+  issuedAt        DateTime  @default(now()) @map("issued_at")
+  receivedAt      DateTime? @map("received_at")
+  subtotal        BigInt
+  taxTotal        BigInt    @map("tax_total")
+  total           BigInt
+  paidTotal       BigInt    @default(0) @map("paid_total")
+  notes           String?
+  createdByUserId String?   @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@unique([organizationId, number])
+  @@index([organizationId, issuedAt])
+  @@index([organizationId, supplierId])
+  @@index([organizationId, status])
+  @@map("purchases")
+}
+
+model purchaseItem {
+  id             String  @id @default(cuid())
+  purchaseId     String  @map("purchase_id")
+  organizationId String  @map("organization_id")
+  productId      String  @map("product_id")
+  qty            Decimal @db.Decimal(18, 3)
+  unitCost       BigInt  @map("unit_cost")
+  taxRateBps     Int     @map("tax_rate_bps")
+  lineTotal      BigInt  @map("line_total")
+
+  @@index([purchaseId])
+  @@index([productId])
+  @@map("purchase_items")
+}
+
+model salesReturn {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  invoiceId       String   @map("invoice_id")
+  number          String
+  total           BigInt
+  refunded        BigInt   @default(0)
+  reason          String?
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, number])
+  @@index([organizationId, invoiceId])
+  @@map("sales_returns")
+}
+
+model salesReturnItem {
+  id             String  @id @default(cuid())
+  returnId       String  @map("return_id")
+  organizationId String  @map("organization_id")
+  productId      String  @map("product_id")
+  qty            Decimal @db.Decimal(18, 3)
+  unitPrice      BigInt  @map("unit_price")
+  lineTotal      BigInt  @map("line_total")
+
+  @@index([returnId])
+  @@index([productId])
+  @@map("sales_return_items")
+}
+
+model brand {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  nameAr         String?  @map("name_ar")
+  description    String?
+  logoUrl        String?  @map("logo_url")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("brands")
+}
+
+model productBarcode {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  productId      String   @map("product_id")
+  barcode        String
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, barcode])
+  @@index([productId])
+  @@map("product_barcodes")
+}
+
+model productBatch {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  productId      String    @map("product_id")
+  batchNo        String    @map("batch_no")
+  mfgDate        DateTime? @map("mfg_date")
+  expiryDate     DateTime? @map("expiry_date")
+  quantity       Decimal   @db.Decimal(18, 3)
+  costPrice      BigInt    @default(0) @map("cost_price")
+  supplierId     String?   @map("supplier_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@unique([organizationId, productId, batchNo])
+  @@index([expiryDate])
+  @@index([productId, expiryDate])
+  @@map("product_batches")
+}
+
+model customerGroup {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  nameAr         String?  @map("name_ar")
+  description    String?
+  discountRate   Decimal  @default(0) @map("discount_rate") @db.Decimal(5, 2)
+  priceMode      String   @default("retail") @map("price_mode")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("customer_groups")
+}
+
+model customerTransaction {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  customerId      String   @map("customer_id")
+  /// debt | payment | refund | adjustment
+  type            String
+  amount          BigInt
+  balanceAfter    BigInt   @map("balance_after")
+  refType         String?  @map("ref_type")
+  refId           String?  @map("ref_id")
+  note            String?
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, customerId, createdAt])
+  @@index([type])
+  @@map("customer_transactions")
+}
+
+model loyaltyTransaction {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  customerId     String   @map("customer_id")
+  /// earn | redeem | adjust
+  type           String
+  points         Decimal  @db.Decimal(18, 2)
+  balanceAfter   Decimal  @map("balance_after") @db.Decimal(18, 2)
+  refType        String?  @map("ref_type")
+  refId          String?  @map("ref_id")
+  note           String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, customerId, createdAt])
+  @@map("loyalty_transactions")
+}
+
+model purchaseOrder {
+  id              String    @id @default(cuid())
+  organizationId  String    @map("organization_id")
+  poNumber        String    @map("po_number")
+  supplierId      String    @map("supplier_id")
+  createdByUserId String?   @map("created_by_user_id")
+  orderDate       DateTime  @default(now()) @map("order_date")
+  expectedDate    DateTime? @map("expected_date")
+  /// draft | pending | approved | ordered | partially_received | received | cancelled
+  status          String    @default("draft")
+  subtotal        BigInt
+  discountTotal   BigInt    @default(0) @map("discount_total")
+  total           BigInt
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@unique([organizationId, poNumber])
+  @@index([organizationId, supplierId])
+  @@index([organizationId, status])
+  @@index([organizationId, orderDate])
+  @@map("purchase_orders")
+}
+
+model purchaseOrderItem {
+  id              String  @id @default(cuid())
+  organizationId  String  @map("organization_id")
+  purchaseOrderId String  @map("purchase_order_id")
+  productId       String  @map("product_id")
+  quantity        Decimal @db.Decimal(18, 3)
+  receivedQty     Decimal @default(0) @map("received_qty") @db.Decimal(18, 3)
+  unitCost        BigInt  @map("unit_cost")
+  discount        BigInt  @default(0)
+  taxRateBps      Int     @default(0) @map("tax_rate_bps")
+  lineTotal       BigInt  @map("line_total")
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+  @@map("purchase_order_items")
+}
+
+model purchaseReturn {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  returnNumber    String   @map("return_number")
+  supplierId      String   @map("supplier_id")
+  purchaseId      String?  @map("purchase_id")
+  createdByUserId String?  @map("created_by_user_id")
+  date            DateTime @default(now())
+  subtotal        BigInt
+  total           BigInt
+  reason          String
+  refundAmount    BigInt   @default(0) @map("refund_amount")
+  creditAmount    BigInt   @default(0) @map("credit_amount")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, returnNumber])
+  @@index([organizationId, supplierId])
+  @@index([organizationId, date])
+  @@map("purchase_returns")
+}
+
+model purchaseReturnItem {
+  id               String  @id @default(cuid())
+  organizationId   String  @map("organization_id")
+  purchaseReturnId String  @map("purchase_return_id")
+  productId        String  @map("product_id")
+  quantity         Decimal @db.Decimal(18, 3)
+  unitCost         BigInt  @map("unit_cost")
+  lineTotal        BigInt  @map("line_total")
+
+  @@index([purchaseReturnId])
+  @@index([productId])
+  @@map("purchase_return_items")
+}
+
+model stockAdjustment {
+  id               String   @id @default(cuid())
+  organizationId   String   @map("organization_id")
+  adjustmentNumber String   @map("adjustment_number")
+  productId        String   @map("product_id")
+  /// increase | decrease
+  type             String
+  quantity         Decimal  @db.Decimal(18, 3)
+  previousQuantity Decimal  @map("previous_quantity") @db.Decimal(18, 3)
+  newQuantity      Decimal  @map("new_quantity") @db.Decimal(18, 3)
+  reason           String
+  note             String?
+  createdByUserId  String?  @map("created_by_user_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, adjustmentNumber])
+  @@index([organizationId, productId])
+  @@index([organizationId, createdAt])
+  @@map("stock_adjustments")
+}
+
+/// Tenant-defined fields attached to any business entity. Values live in
+/// custom_field_values (EAV-lite) so unique/index flags are enforceable and
+/// report datasets can aggregate them without schema migrations.
+model customField {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  /// Target entity: products | customers | suppliers | sales | purchases
+  entityType     String   @map("entity_type")
+  /// Machine key used in formulas/rules; unique per org+entityType.
+  key            String
+  nameAr         String   @map("name_ar")
+  nameEn         String?  @map("name_en")
+  /// One of CUSTOM_FIELD_TYPES (21 types, see src/core/custom-fields/types.ts)
+  type           String
+  /// Select/multiselect choices etc.: {choices:[{value,labelAr,labelEn}]}
+  options        Json?
+  /// Conditional visibility/validation: {required,min,max,regex,visibleWhen}
+  rules          Json?
+  isUnique       Boolean  @default(false) @map("is_unique")
+  hasIndex       Boolean  @default(false) @map("has_index")
+  isEncrypted    Boolean  @default(false) @map("is_encrypted")
+  /// Formula expression for computed fields (safe parser only).
+  formula        String?
+  sortOrder      Int      @default(0) @map("sort_order")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, entityType, key])
+  @@index([organizationId, entityType, isActive])
+  @@map("custom_fields")
+}
+
+model customFieldValue {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  fieldId        String    @map("field_id")
+  entityType     String    @map("entity_type")
+  entityId       String    @map("entity_id")
+  valueText      String?   @map("value_text")
+  /// Encrypted payloads (AES-256-GCM) stored here with "enc:v1:" prefix.
+  valueNumber    Float?    @map("value_number")
+  valueDate      DateTime? @map("value_date")
+  valueBool      Boolean?  @map("value_bool")
+
+  @@unique([fieldId, entityId])
+  @@index([organizationId, entityType, entityId])
+  @@index([fieldId, valueText])
+  @@index([fieldId, valueNumber])
+  @@map("custom_field_values")
+}
+
+/// Saved table views per user/module: columns, filters, sort.
+model savedView {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  /// Null = shared view visible to the whole org.
+  userId         String?  @map("user_id")
+  entityType     String   @map("entity_type")
+  name           String
+  /// {columns:[key|builtin], filters:[{key,op,value}], sort:{key,dir}}
+  config         Json
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, entityType])
+  @@index([userId])
+  @@map("saved_views")
+}
+
+/// Per-user dashboard widget layouts.
+model dashboardLayout {
+  id             String @id @default(cuid())
+  organizationId String @map("organization_id")
+  userId         String @map("user_id")
+  /// {widgets:[{i,type,moduleId,title,x,y,w,h}]}
+  layout         Json
+
+  @@unique([organizationId, userId])
+  @@map("dashboard_layouts")
+}
+
+/// Transactional outbox events. Written in the SAME tx as the business write.
+/// A pg-backed worker polls and dispatches matching workflow rules.
+model outboxEvent {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  /// Domain event key, e.g. "sale.created", "inventory.low", "debt.limit"
+  eventType      String    @map("event_type")
+  /// Idempotency key: deduplicates identical events across tx retries.
+  /// Unique per org+eventType+entityId — same event never processed twice.
+  dedupeKey      String    @map("dedupe_key")
+  /// Entity that triggered the event (e.g. sale invoice id).
+  entityId       String?   @map("entity_id")
+  /// Full event payload (JSON-serializable).
+  payload        Json
+  /// Pending | Processing | Completed | Failed | DeadLettered
+  status         String    @default("pending")
+  /// Exponential backoff: attempt 0 → 1m, 1 → 2m, 2 → 4m …
+  attempt        Int       @default(0)
+  maxAttempts    Int       @default(5) @map("max_attempts")
+  lastError      String?   @map("last_error")
+  nextRunAt      DateTime? @map("next_run_at")
+  processedAt    DateTime? @map("processed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@unique([organizationId, dedupeKey])
+  @@index([status, nextRunAt])
+  @@index([organizationId, eventType])
+  @@map("outbox_events")
+}
+
+/// Code-registered trigger → condition → action rules per tenant.
+model workflowRule {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  /// Domain event type this rule listens to (e.g. "sale.created", "inventory.low")
+  triggerEvent   String   @map("trigger_event")
+  /// Safe JSON condition AST: {field, op, value} or {logic:"and|or", children:[...]}
+  conditions     Json
+  /// Array of actions: [{type:"notification|webhook|create_record|email_log|task", config:{...}}]
+  actions        Json
+  isActive       Boolean  @default(true) @map("is_active")
+  /// If true, workflow was generated by AI and must be explicitly activated.
+  isDraft        Boolean  @default(false) @map("is_draft")
+  sortOrder      Int      @default(0) @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, triggerEvent, isActive])
+  @@map("workflow_rules")
+}
+
+/// Execution log for every workflow rule fire.
+model workflowExecution {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  ruleId         String   @map("rule_id")
+  /// The outbox event that triggered this execution.
+  eventId        String?  @map("event_id")
+  /// Success | Failed | DeadLettered
+  status         String
+  /// Action type that was executed.
+  actionType     String   @map("action_type")
+  /// Serialized result/error from the action executor.
+  result         Json?
+  /// Duration in milliseconds.
+  durationMs     Int?     @map("duration_ms")
+  attempt        Int      @default(1)
+  lastError      String?  @map("last_error")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, ruleId, createdAt])
+  @@index([organizationId, status])
+  @@map("workflow_executions")
+}
+
+/// Webhook endpoints registered by tenant admins.
+model webhookEndpoint {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  /// Human-readable name (e.g. "Slack notifications")
+  name           String
+  /// Target URL
+  url            String
+  /// HMAC-SHA256 signing key (hex). Null = no signing.
+  signingKey     String?  @map("Signing_key")
+  /// Event types to deliver (JSON array of strings). Empty = all events.
+  events         Json     @default("[]")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, isActive])
+  @@map("webhook_endpoints")
+}
+
+/// In-app notifications for users.
+model notification {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  /// Target user (null = broadcast to all org members).
+  userId         String?  @map("user_id")
+  /// Notification title
+  titleAr        String?  @map("title_ar")
+  titleEn        String?  @map("title_en")
+  /// Notification body
+  bodyAr         String?  @map("body_ar")
+  bodyEn         String?  @map("body_en")
+  /// Link to navigate to when clicked.
+  href           String?
+  /// Read status
+  isRead         Boolean  @default(false) @map("is_read")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, userId, isRead])
+  @@map("notifications")
+}
+
+/// Registered devices per user. Updated on each sync.
+model syncDevice {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  userId         String    @map("user_id")
+  /// Client-generated device fingerprint (stable across sessions).
+  fingerprint    String
+  /// Browser/platform info (e.g. "Chrome 120 / Windows 10").
+  platform       String?
+  /// ISO timestamp of last successful sync.
+  lastSyncAt     DateTime? @map("last_sync_at")
+  /// Number of pending outbox ops on this device.
+  pendingCount   Int       @default(0) @map("pending_count")
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@unique([organizationId, userId, fingerprint])
+  @@index([organizationId, userId])
+  @@map("sync_devices")
+}
+
+/// Idempotency keys for sync replay protection. Expires after 7 days.
+model idempotencyKey {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  /// Unique sync operation key (client UUID + entity + op type).
+  key            String
+  /// HTTP status code of the original response.
+  statusCode     Int      @map("status_code")
+  /// Serialized response body (the original result).
+  result         Json
+  createdAt      DateTime @default(now()) @map("created_at")
+  /// Auto-cleanup after 7 days.
+  expiresAt      DateTime @map("expires_at")
+
+  @@unique([organizationId, key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
+
+/// Conflicting concurrent edits surfaced to admin for resolution.
+model conflictQueue {
+  id               String    @id @default(cuid())
+  organizationId   String    @map("organization_id")
+  /// Entity type that conflicted (e.g. "product", "customer").
+  entityType       String    @map("entity_type")
+  /// Entity ID that conflicted.
+  entityId         String    @map("entity_id")
+  /// Field name that differs.
+  fieldName        String    @map("field_name")
+  /// The client-submitted value.
+  localValue       Json      @map("local_value")
+  /// The current server value.
+  remoteValue      Json      @map("remote_value")
+  /// Timestamps for audit.
+  localUpdatedAt   DateTime? @map("local_updated_at")
+  remoteUpdatedAt  DateTime? @map("remote_updated_at")
+  /// pending | resolved_local | resolved_remote
+  status           String    @default("pending")
+  /// The winning value after resolution.
+  resolvedValue    Json?     @map("resolved_value")
+  /// User who resolved (null = pending).
+  resolvedByUserId String?   @map("resolved_by_user_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  resolvedAt       DateTime? @map("resolved_at")
+
+  @@index([organizationId, entityType, status])
+  @@index([organizationId, entityId])
+  @@map("conflict_queue")
+}
+
+/// Held / suspended POS carts. JSON payload preserves the exact cart state so
+/// resumed carts produce identical sales. One hold per session at a time.
+model posHold {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  branchId        String?  @map("branch_id")
+  warehouseId     String   @map("warehouse_id")
+  customerId      String?  @map("customer_id")
+  cashAccountId   String?  @map("cash_account_id")
+  /// Serialized cart: { items: [{ productId, qty, unitPrice, discount }], notes, discountTotal }
+  cart            Json
+  /// Human-readable label shown in the hold list (e.g. "Table 3" or cashier name)
+  label           String?
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@index([createdByUserId])
+  @@map("pos_holds")
+}
+
+/// LLM provider configuration. Platform admins configure endpoint/model/key.
+model aiProvider {
+  id        String   @id @default(cuid())
+  name      String
+  /// Base URL of the OpenAI-compatible endpoint
+  endpoint  String
+  /// Model identifier (e.g. "gpt-4o", "claude-3-sonnet")
+  model     String
+  /// Encrypted API key
+  apiKey    String   @map("api_key")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("ai_providers")
+}
+
+/// Per-org AI usage logs for metering + billing.
+model aiUsageLog {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  providerId      String?  @map("provider_id")
+  model           String
+  /// Input/prompt tokens
+  tokensIn        Int      @default(0) @map("tokens_in")
+  /// Output/completion tokens
+  tokensOut       Int      @default(0) @map("tokens_out")
+  /// Cost in minor currency units (bigint stored as Int for Prisma compat)
+  costMicro       Int      @default(0) @map("cost_micro")
+  /// Tool calls made during this request
+  toolCalls       Int      @default(0) @map("tool_calls")
+  /// Conversation grouping
+  conversationId  String?  @map("conversation_id")
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@map("ai_usage_logs")
+}
+
+/// Single-use confirmation tokens for mutating AI actions.
+model aiConfirmToken {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  /// The pending action type (e.g. "create_customer", "create_sale_draft")
+  actionType      String   @map("action_type")
+  /// Serialized action args (JSON)
+  actionArgs      Json     @map("action_args")
+  /// Tool call ID that produced this pending action
+  toolCallId      String   @map("tool_call_id")
+  createdByUserId String   @map("created_by_user_id")
+  /// Single-use — set to true after execution
+  used            Boolean  @default(false) @map("used")
+  /// Expiry (15 minutes)
+  expiresAt       DateTime @map("expires_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdByUserId])
+  @@map("ai_confirm_tokens")
+}
+
+/// Scoped API keys for third-party integrations. Each key is bound to one org
+/// and carries a JSON array of permission scopes (module:action pairs).
+model apiKey {
+  id              String    @id @default(cuid())
+  organizationId  String    @map("organization_id")
+  name            String
+  /// Prefix shown in UI (first 8 chars of the hash). Not the secret itself.
+  prefix          String
+  /// SHA-256 hash of the full key. The raw key is only shown once at creation.
+  keyHash         String    @map("key_hash")
+  /// JSON array of scope strings like ["products:read", "sales:create"]
+  scopes          Json      @default("[]")
+  /// null = never expires
+  expiresAt       DateTime? @map("expires_at")
+  lastUsedAt      DateTime? @map("last_used_at")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdByUserId String?   @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@unique([organizationId, keyHash])
+  @@index([organizationId, isActive])
+  @@map("api_keys")
+}
+
+/// Rate-limit counter per API key. Sliding-window in PostgreSQL: rows older
+/// than the window are pruned; current count lives here.
+model apiRateLimit {
+  id           String   @id @default(cuid())
+  apiKeyId     String   @map("api_key_id")
+  windowStart  DateTime @map("window_start")
+  requestCount Int      @default(1) @map("request_count")
+
+  @@unique([apiKeyId, windowStart])
+  @@index([apiKeyId])
+  @@map("api_rate_limits")
+}
+
+/// Delivery log for outbound webhooks.
+model webhookDelivery {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  endpointId     String    @map("endpoint_id")
+  eventType      String    @map("event_type")
+  payload        Json
+  /// HMAC signature sent in X-Webhook-Signature header.
+  signature      String?
+  /// HTTP status code from the target (null = not yet attempted / timeout).
+  responseStatus Int?      @map("response_status")
+  responseBody   String?   @map("response_body")
+  /// pending | success | failed | retrying
+  status         String    @default("pending")
+  attempt        Int       @default(1)
+  maxAttempts    Int       @default(3) @map("max_attempts")
+  lastError      String?   @map("last_error")
+  nextRetryAt    DateTime? @map("next_retry_at")
+  deliveredAt    DateTime? @map("delivered_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([organizationId, status])
+  @@index([endpointId, createdAt])
+  @@index([status, nextRetryAt])
+  @@map("webhook_deliveries")
+}
+
+/// Data import jobs — CSV/XLSX upload → validate → preview → commit.
+model importJob {
+  id              String    @id @default(cuid())
+  organizationId  String    @map("organization_id")
+  /// products | customers | suppliers | opening_stock
+  entityType      String    @map("entity_type")
+  /// pending | validating | preview | committed | failed
+  status          String    @default("pending")
+  /// Original filename
+  filename        String
+  /// Total rows in file
+  totalRows       Int       @default(0) @map("total_rows")
+  /// Rows that passed validation
+  validRows       Int       @default(0) @map("valid_rows")
+  /// Rows that failed validation
+  invalidRows     Int       @default(0) @map("invalid_rows")
+  /// JSON: [{row,field,message}] validation errors
+  errors          Json?
+  /// Number of rows actually committed
+  committedRows   Int       @default(0) @map("committed_rows")
+  createdByUserId String?   @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  completedAt     DateTime? @map("completed_at")
+
+  @@index([organizationId, entityType])
+  @@map("import_jobs")
+}
+
+/// Data export jobs — async generation with status tracking.
+model dataExport {
+  id              String    @id @default(cuid())
+  organizationId  String    @map("organization_id")
+  /// products | customers | suppliers | sales | purchases | inventory | expenses
+  entityType      String    @map("entity_type")
+  /// csv | xlsx
+  format          String    @default("csv")
+  /// pending | processing | completed | failed
+  status          String    @default("pending")
+  /// Filter params used for the export (JSON)
+  filters         Json?
+  /// Total rows exported
+  rowCount        Int       @default(0)
+  /// File path or URL of the generated file
+  fileUrl         String?   @map("file_url")
+  fileSize        Int?      @map("file_size")
+  sha256          String?
+  errorMessage    String?   @map("error_message")
+  createdByUserId String?   @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  completedAt     DateTime? @map("completed_at")
+
+  @@index([organizationId, entityType])
+  @@map("data_exports")
+}
+
+/// Backup records — pg_dump manifest with verification.
+model backupRecord {
+  id              String    @id @default(cuid())
+  organizationId  String?   @map("organization_id")
+  /// full | tenant
+  type            String    @default("full")
+  /// pending | completed | failed | verified
+  status          String    @default("pending")
+  /// File path of the dump
+  filePath        String?   @map("file_path")
+  fileSize        BigInt?   @map("file_size")
+  /// SHA-256 of the dump file for integrity verification
+  sha256          String?
+  /// Whether the backup was verified (restored + checked)
+  verified        Boolean   @default(false)
+  errorMessage    String?   @map("error_message")
+  /// JSON manifest: { tables: [...], rowCount: N, durationMs: N }
+  manifest        Json?
+  createdByUserId String?   @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  completedAt     DateTime? @map("completed_at")
+
+  @@index([organizationId, createdAt])
+  @@map("backup_records")
+}
+
+/// Patient records for the physical therapy center
+model samaPatient {
+  id                String    @id @default(cuid())
+  organizationId    String    @map("organization_id")
+  serialNumber      Int       @map("serial_number")
+  firstName         String    @map("first_name")
+  lastName          String?   @map("last_name")
+  phone             String?
+  gender            String?
+  dateOfBirth       DateTime? @map("date_of_birth")
+  examType          String?   @map("exam_type")
+  price             BigInt    @default(0)
+  paymentMethod     String?   @map("payment_method")
+  walletType        String?   @map("wallet_type")
+  transactionNumber String?   @map("transaction_number")
+  registrationDate  DateTime? @map("registration_date")
+  notes             String?
+  special           String?
+  status            String    @default("progress")
+  isActive          Boolean   @default(true) @map("is_active")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+
+  @@unique([organizationId, serialNumber])
+  @@index([organizationId, isActive])
+  @@index([organizationId, phone])
+  @@map("sama_patients")
+}
+
+/// Treatment services offered by the clinic
+model samaService {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  name           String
+  nameEn         String?   @map("name_en")
+  price          BigInt
+  iconUrl        String?   @map("icon_url")
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+  @@map("sama_services")
+}
+
+/// Employees (therapists, receptionists, etc.)
+model samaEmployee {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  name           String
+  department     String?
+  phone          String?
+  salary         BigInt?
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  @@index([organizationId, isActive])
+  @@map("sama_employees")
+}
+
+/// Patient treatment sessions
+model samaSession {
+  id                String    @id @default(cuid())
+  organizationId    String    @map("organization_id")
+  patientName       String    @map("patient_name")
+  sessionType       String    @default("normal") @map("session_type")
+  special           String?
+  status            String    @default("progress")
+  sessionDate       DateTime? @map("session_date")
+  price             BigInt?
+  notes             String?
+  paymentMethod     String?   @map("payment_method")
+  walletType        String?   @map("wallet_type")
+  transactionNumber String?   @map("transaction_number")
+  prepaid           Boolean   @default(false)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+
+  @@index([organizationId, status])
+  @@index([organizationId, sessionDate])
+  @@map("sama_sessions")
+}
+
+/// Patient appointments
+model samaAppointment {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  patientName    String    @map("patient_name")
+  phone          String?
+  therapist      String?
+  date           DateTime?
+  status         String    @default("pending")
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  @@index([organizationId, date])
+  @@index([organizationId, status])
+  @@map("sama_appointments")
+}
+
+/// Employee salary advances
+model samaAdvance {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  employeeName   String    @map("employee_name")
+  specialty      String?
+  amount         BigInt
+  date           DateTime
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  @@index([organizationId, date])
+  @@map("sama_advances")
+}
+
+/// Employee coverage/session tracking
+model samaCoverage {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  employeeName   String    @map("employee_name")
+  sessionType    String    @default("normal") @map("session_type")
+  date           DateTime
+  price          BigInt
+  therapistShare BigInt    @default(50000) @map("therapist_share")
+  from           String?
+  to             String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  @@index([organizationId, date])
+  @@index([organizationId, employeeName])
+  @@map("sama_coverages")
+}
+
+/// Calendar events
+model samaCalendarEvent {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  eventName      String    @map("event_name")
+  date           DateTime
+  endDate        DateTime? @map("end_date")
+  type           String
+  startTime      String?   @map("start_time")
+  endTime        String?   @map("end_time")
+  location       String?
+  description    String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  @@index([organizationId, date])
+  @@map("sama_calendar_events")
+}
+
+/// Pending platform approval to install an app into an existing (already active) organization.
+/// Created when a tenant requests a SECOND+ system — unlike the first app,
+/// additional systems require platform review.
+model organizationAppRequest {
+  id                String       @id @default(cuid())
+  organizationId    String       @map("organization_id")
+  appId             String       @map("app_id")
+  requestedByUserId String       @map("requested_by_user_id")
+  /// pending | approved | rejected
+  status            String       @default("pending")
+  planCode          String?
+  note              String?
+  decidedByUserId   String?      @map("decided_by_user_id")
+  decidedAt         DateTime?    @map("decided_at")
+  rejectReason      String?      @map("reject_reason")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  app          app          @relation(fields: [appId], references: [id], onDelete: Cascade)
+  organization organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy  user         @relation("OrgAppRequestRequester", fields: [requestedByUserId], references: [id])
+
+  @@unique([organizationId, appId])
+  @@index([organizationId, status])
+  @@index([status, createdAt])
+  @@map("organization_app_requests")
+}
+
+/// User-pinned apps for quick access on home / workspace.
+model pinnedApp {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  appId     String   @map("app_id")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user user @relation("UserPinnedSystems", fields: [userId], references: [id], onDelete: Cascade)
+  app  app  @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, appId])
+  @@index([appId])
+  @@map("pinned_apps")
+}
+
+/// The password a member uses INSIDE one organization's own copy of a system.
+///
+/// Each org runs its own copy of a cloned system (`system/<slug>/` copied into
+/// `orginazition/<org>/systems/<slug>/`), and each copy has its own database with
+/// its own `users` table that the platform cannot read. The platform stores
+/// Better Auth's scrypt hash in `accounts.password`, which no cloned system can
+/// verify and which cannot be converted to bcrypt. So at the only two moments the
+/// platform sees the plaintext — signup and change-password — it also writes a
+/// bcrypt-12 hash here, and pushes it into the clone's `users.passwordHash`. That
+/// is what lets a member sign in with one email and one password on both sides.
+///
+/// One row per (org, app, user): the same person in two orgs gets two rows, and
+/// removing a member from an org cascades this away.
+///
+/// Absent row = no direct login for that pair, and the member reaches the system
+/// through the platform's gateway instead. That is the correct state for a social
+/// login (there is no password to mirror) and for anyone who has not re-confirmed
+/// their password since this shipped. Never written with plaintext: `passwordHash`
+/// is always a bcrypt digest, and the platform's own scrypt hash is never copied here.
+model systemCredential {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  appId          String   @map("app_id")
+  userId         String   @map("user_id")
+  /// The username this person signs in with inside the clone. Stays the platform
+  /// username, so the profile page can show the member what to type.
+  username       String
+  /// bcrypt-12 digest, produced by the same library and cost the clone verifies with.
+  passwordHash   String   @map("password_hash")
+  /// When this digest was last pushed into the clone's own database. Null means
+  /// stored but not yet delivered.
+  syncedAt       DateTime? @map("synced_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user         user         @relation("UserSystemCredentials", fields: [userId], references: [id], onDelete: Cascade)
+  organization organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  app          app          @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, appId, userId])
+  @@index([userId])
+  @@index([organizationId, appId])
+  @@map("system_credentials")
+}
+
+/// Social follow graph between platform users.
+model userFollow {
+  id          String   @id @default(cuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower  user @relation("UserFollowsFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  following user @relation("UserFollowsFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+  @@map("user_follows")
+}

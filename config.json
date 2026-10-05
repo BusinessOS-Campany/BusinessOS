@@ -1,0 +1,27 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "command": {},
+  "plugin": [],
+  "share": "disabled",
+  "autoupdate": false,
+  "username": "GMSNOW",
+  "mode": {},
+  "agent": {},
+  "permission": {
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow",
+      "*id_rsa*": "deny",
+      "*credentials*.json": "deny",
+      "*auth.json": "deny"
+    },
+    "edit": "allow",
+    "bash": "allow",
+    "external_directory": "allow",
+    "webfetch": "allow",
+    "websearch": "ask",
+    "doom_loop": "allow"
+  }
+}

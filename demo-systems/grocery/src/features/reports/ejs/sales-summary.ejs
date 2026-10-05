@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %> - <%= storeNameAr %></title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Cairo', Tahoma, sans-serif;
+            background: linear-gradient(135deg, #f0f4ff 0%, #e8ecf8 100%);
+            direction: rtl;
+            padding: 10px;
+            color: #1a1a2e;
+        }
+        .container {
+            max-width: 1150px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.12);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            padding: 8px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #fff;
+        }
+        .header-left { text-align: left; font-size: 8px; font-weight: 600; line-height: 1.5; opacity: 0.9; letter-spacing: 0.5px; }
+        .header-right { text-align: right; font-size: 11px; font-weight: 700; line-height: 1.5; }
+        .header-center { text-align: center; }
+        .logo-wrapper {
+            width: 38px; height: 38px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+        .logo-wrapper span { color: #fff; font-weight: 900; font-size: 16px; }
+        .title-section {
+            background: linear-gradient(135deg, #7c3aed, #8b5cf6, #a78bfa);
+            color: #fff;
+            text-align: center;
+            padding: 5px 20px;
+            font-size: 13px;
+            font-weight: 800;
+            position: relative;
+        }
+        .title-section::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #fbbf24, #f59e0b, #fbbf24);
+        }
+        .title-section p { margin: 0; color: #fff; line-height: 1.4; }
+        .title-section .period { font-size: 9px; font-weight: 600; opacity: 0.9; margin-top: 0; }
+        .table-wrap { padding: 0 0 6px; }
+        .table-wrap + .table-wrap { padding-top: 8px; }
+        .table-title {
+            font-size: 11px;
+            font-weight: 800;
+            color: #334155;
+            padding: 8px 16px 2px;
+        }
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 11px;
+        }
+        thead th {
+            padding: 5px 4px;
+            text-align: center;
+            font-size: 10px;
+            font-weight: 700;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .th-date { background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #1e40af; }
+        .th-income { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; }
+        .th-expenses { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; }
+        .th-net { background: linear-gradient(135deg, #e9d5ff, #d8b4fe); color: #581c87; }
+        .th-notes { background: linear-gradient(135deg, #f1f5f9, #e2e8f0); color: #334155; }
+        tbody td {
+            padding: 5px 4px;
+            text-align: center;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 11px;
+        }
+        .cell-date { font-weight: 700; color: #1e40af; }
+        .cell-day { color: #334155; font-weight: 600; }
+        .cell-income { color: #059669; font-weight: 700; direction: ltr; }
+        .cell-expenses { color: #dc2626; font-weight: 700; direction: ltr; }
+        .cell-net { color: #7c3aed; font-weight: 800; direction: ltr; }
+        .cell-notes { text-align: right; font-size: 11px; color: #475569; line-height: 1.5; max-width: 260px; }
+        .total-row td {
+            padding: 6px 4px;
+            font-weight: 800;
+            font-size: 12px;
+            border-top: 2px solid #cbd5e1;
+            background: #f8fafc;
+        }
+        .total-label { text-align: center; color: #1e293b; font-size: 13px; }
+        .total-income { color: #059669; direction: ltr; text-align: center; }
+        .total-expenses { color: #dc2626; direction: ltr; text-align: center; }
+        .total-net { color: #7c3aed; direction: ltr; text-align: center; font-size: 14px; }
+        .summary {
+            margin: 10px 20px 0;
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+        .summary-title {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            color: #fff;
+            text-align: center;
+            padding: 7px;
+            font-size: 13px;
+            font-weight: 800;
+        }
+        .summary table { width: 100%; }
+        .summary td {
+            padding: 5px 14px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 11px;
+        }
+        .summary td:first-child { text-align: right; font-weight: 700; color: #334155; width: 55%; }
+        .summary td:last-child { text-align: left; font-weight: 800; direction: ltr; width: 45%; }
+        .summary .row-income td:last-child { color: #059669; }
+        .summary .row-expenses td:last-child { color: #dc2626; }
+        .summary .row-net td:last-child { color: #7c3aed; }
+        .status-row td { background: linear-gradient(135deg, #f5f3ff, #ede9fe); }
+        .status-row td:first-child { color: #5b21b6; font-size: 13px; font-weight: 900; }
+        .status-row td:last-child {
+            color: #7c3aed;
+            font-size: 16px;
+            font-weight: 900;
+        }
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding: 10px 28px 12px;
+            background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+            border-top: 1px solid #e2e8f0;
+            margin-top: 10px;
+        }
+        .footer div { font-weight: 600; color: #475569; text-align: center; font-size: 12px; }
+        .footer .line {
+            display: block;
+            width: 100px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #94a3b8, transparent);
+            margin: 4px auto 0;
+        }
+        .footer .meta { font-size: 10px; color: #94a3b8; }
+        .footer .sign-line {
+            display: inline-block;
+            width: 120px;
+            border-bottom: 2px dashed #94a3b8;
+            margin-top: 6px;
+            padding-bottom: 3px;
+        }
+        .empty-state { padding: 20px; text-align: center; color: #94a3b8; font-size: 14px; }
+        @media print {
+            body { background: #fff; padding: 0; }
+            .container { box-shadow: none; border-radius: 0; }
+            .header, .title-section, .total-row, .summary-title, .status-row,
+            .th-date, .th-income, .th-expenses, .th-net, .th-notes {
+                -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+            }
+            tr { break-inside: avoid; page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="header">
+        <div class="header-left"><%= storeName %></div>
+        <div class="header-center">
+            <div class="logo-wrapper"><span><%= storeLetter %></span></div>
+        </div>
+        <div class="header-right"><%= storeNameAr %></div>
+    </div>
+
+    <div class="title-section">
+        <p><%= title %></p>
+        <div class="period">الفترة: <%= fromLabel %> → <%= toLabel %></div>
+    </div>
+
+    <div class="table-wrap">
+        <div class="table-title">التوزيع اليومي</div>
+        <table>
+            <thead>
+                <tr>
+                    <th class="th-date">التاريخ</th>
+                    <th class="th-income">الإيراد</th>
+                    <th class="th-expenses">التكلفة</th>
+                    <th class="th-net">الربح</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (buckets.length === 0) { %>
+                    <tr><td colspan="4"><div class="empty-state">لا توجد بيانات لهذه الفترة</div></td></tr>
+                <% } else { %>
+                    <% buckets.forEach((d) => { %>
+                        <tr>
+                            <td class="cell-date"><%= d.day %></td>
+                            <td class="cell-income"><%= money(d.revenue) %></td>
+                            <td class="cell-expenses"><%= money(d.cost) %></td>
+                            <td class="cell-net"><%= money(d.profit) %></td>
+                        </tr>
+                    <% }) %>
+                    <tr class="total-row">
+                        <td class="total-label">الإجمالي العام</td>
+                        <td class="total-income"><%= money(dayTotals.revenue) %></td>
+                        <td class="total-expenses"><%= money(dayTotals.cost) %></td>
+                        <td class="total-net"><%= money(dayTotals.profit) %></td>
+                    </tr>
+                <% } %>
+            </tbody>
+        </table>
+    </div>
+
+    <% if (byCashier.length > 0) { %>
+    <div class="table-wrap">
+        <div class="table-title">تقرير الكاشير</div>
+        <table>
+            <thead>
+                <tr>
+                    <th class="th-notes">الكاشير</th>
+                    <th class="th-date">الفواتير</th>
+                    <th class="th-net">صافي المبيعات</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% byCashier.forEach((c) => { %>
+                    <tr>
+                        <td class="cell-notes"><%= c.nameAr ?? c.name %></td>
+                        <td class="cell-date"><%= num(c.qty) %></td>
+                        <td class="cell-net"><%= money(c.total) %></td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+    <% } %>
+
+    <% if (products.length > 0) { %>
+    <div class="table-wrap">
+        <div class="table-title">أداء المنتجات</div>
+        <table>
+            <thead>
+                <tr>
+                    <th class="th-notes">المنتج</th>
+                    <th class="th-date">الوحدات</th>
+                    <th class="th-income">الإيراد</th>
+                    <th class="th-net">الربح</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% products.forEach((p) => { %>
+                    <tr>
+                        <td class="cell-notes"><%= p.nameAr ?? p.name %></td>
+                        <td class="cell-date"><%= num(p.qty) %></td>
+                        <td class="cell-income"><%= money(p.total) %></td>
+                        <td class="cell-net"><%= money(p.profit) %></td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+    <% } %>
+
+    <div class="summary">
+        <div class="summary-title">الملخص المالي</div>
+        <table>
+            <tr><td>الفواتير</td><td><%= num(summary.invoices) %></td></tr>
+            <tr class="row-income"><td>إجمالي المبيعات</td><td><%= money(summary.grossSales) %></td></tr>
+            <tr class="row-expenses"><td>المرتجعات</td><td><%= money(summary.returnsTotal) %></td></tr>
+            <tr class="row-expenses"><td>الخصومات</td><td><%= money(summary.discounts) %></td></tr>
+            <tr class="row-expenses"><td>تكلفة البضاعة المباعة</td><td><%= money(summary.cogs) %></td></tr>
+            <tr class="row-net"><td>صافي المبيعات</td><td><%= money(summary.netSales) %></td></tr>
+            <tr class="status-row"><td>الوضع المالي</td><td><%= money(summary.netSales) %></td></tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        <div>إدارة المتجر<span class="sign-line"></span></div>
+        <div class="meta">
+            <%= storeNameAr %>
+            <span class="line"></span>
+            <%= generatedAt %>
+        </div>
+        <div>السكرتارية<span class="sign-line"></span></div>
+    </div>
+
+</div>
+<% if (autoprint !== false) { %><script>window.onload=function(){window.print()}</script><% } %>
+</body>
+</html>

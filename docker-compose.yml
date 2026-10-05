@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: bos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bos
+      POSTGRES_PASSWORD: bos_dev_2026
+      POSTGRES_DB: businessos
+    ports:
+      - "5432:5432"
+    volumes:
+      - bos_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bos -d businessos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  pgadmin:
+    image: dpage/pgadmin8:latest
+    container_name: bos-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@businessos.local
+      PGADMIN_DEFAULT_PASSWORD: bos_dev_2026
+      PGADMIN_CONFIG_SERVER_MODE: "True"
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - bos_pgadmin:/var/lib/pgadmin
+
+  # Redis is intentionally NOT enabled: the job queue runs on PostgreSQL.
+  # Enable only when measured need exists (see ARCHITECTURE.md §12).
+  # redis:
+  #   image: redis:8-alpine
+  #   ports:
+  #     - "6379:6379"
+
+volumes:
+  bos_pgdata:
+  bos_pgadmin:

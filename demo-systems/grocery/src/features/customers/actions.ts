@@ -1,0 +1,130 @@
+﻿"use server";
+
+import { guard, ok } from "@/shared/core/api-response";
+import { requirePermission } from "@/features/auth/session";
+import {
+  saveCustomer, softDeleteCustomer, getCustomerForEdit,
+  listGroups, saveGroup, deleteGroup,
+  recordCustomerTxn, listCustomerTransactions, getStatement,
+  deleteCustomerTxnsByMonth,
+  updateCustomerTxn, deleteCustomerTxn,
+  attachCustomerTxnImage, deleteCustomerTxnImage,
+  setCustomerBalanceFrozen,
+} from "./service";
+
+export async function saveCustomerAction(id: string | null, raw: unknown) {
+  return guard(async () => {
+    if (id) await requirePermission("customers.update");
+    else await requirePermission("customers.create");
+    const c = await saveCustomer(id, raw);
+    return ok({ id: c.id, code: c.code });
+  });
+}
+
+export async function customerEditAction(id: string) {
+  return guard(async () => {
+    await requirePermission("customers.view");
+    const c = await getCustomerForEdit(id);
+    return ok({
+      id: c.id, name: c.name, nameAr: c.nameAr, phone: c.phone, email: c.email,
+      address: c.address, groupId: c.groupId ?? "", creditLimit: String(c.creditLimit),
+      notes: c.notes,
+    });
+  });
+}
+
+export async function deleteCustomerAction(id: string) {
+  return guard(async () => {
+    await requirePermission("customers.update");
+    await softDeleteCustomer(id);
+    return ok({ deleted: true });
+  });
+}
+
+export async function setCustomerBalanceFrozenAction(id: string, frozen: boolean) {
+  return guard(async () => {
+    await requirePermission("customers.credit");
+    const c = await setCustomerBalanceFrozen(id, frozen);
+    return ok({ id: c.id, balanceFrozen: c.balanceFrozen });
+  });
+}
+
+export async function groupListAction() {
+  return guard(async () => {
+    await requirePermission("customers.view");
+    return ok(await listGroups());
+  });
+}
+
+export async function saveGroupAction(id: string | null, raw: unknown) {
+  return guard(async () => {
+    await requirePermission("customers.update");
+    return ok(await saveGroup(id, raw));
+  });
+}
+
+export async function deleteGroupAction(id: string) {
+  return guard(async () => {
+    await requirePermission("customers.update");
+    await deleteGroup(id);
+    return ok({ deleted: true });
+  });
+}
+
+export async function recordCustomerTxnAction(raw: unknown) {
+  return guard(async () => {
+    const user = await requirePermission("customers.credit");
+    return ok(await recordCustomerTxn(user.id, raw));
+  });
+}
+
+export async function deleteCustomerTxnsMonthAction(raw: { month: string; customerId?: string }) {
+  return guard(async () => {
+    const user = await requirePermission("customers.credit");
+    return ok(await deleteCustomerTxnsByMonth(user.id, raw));
+  });
+}
+
+export async function updateCustomerTxnAction(raw: { id: string; amount: number; note?: string }) {
+  return guard(async () => {
+    const user = await requirePermission("customers.credit");
+    return ok(await updateCustomerTxn(user.id, raw));
+  });
+}
+
+export async function deleteCustomerTxnAction(id: string) {
+  return guard(async () => {
+    const user = await requirePermission("customers.credit");
+    return ok(await deleteCustomerTxn(user.id, id));
+  });
+}
+
+/** Attach or replace the note image (file travels as a data URL, never base64-stored). */
+export async function attachCustomerTxnImageAction(txnId: string, input: { dataUrl: string; mime: string }) {
+  return guard(async () => {
+    const user = await requirePermission("customers.credit");
+    return ok(await attachCustomerTxnImage(user.id, txnId, input));
+  });
+}
+
+export async function deleteCustomerTxnImageAction(txnId: string) {
+  return guard(async () => {
+    await requirePermission("customers.credit");
+    await deleteCustomerTxnImage(txnId);
+    return ok({ deleted: true });
+  });
+}
+
+export async function customerTxnListAction(customerId?: string) {
+  return guard(async () => {
+    await requirePermission("customers.view");
+    return ok(await listCustomerTransactions({ customerId }));
+  });
+}
+
+export async function statementAction(customerId: string) {
+  return guard(async () => {
+    await requirePermission("customers.view");
+    return ok(await getStatement(customerId));
+  });
+}

@@ -1,0 +1,943 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — LIGHT THEME (default)
+   ════════════════════════════════════════════════════════════════ */
+:root {
+  /* Base */
+  --background: #ffffff;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+
+  /* Brand */
+  --primary: #03EABC;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Borders */
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #0263D1;
+
+  /* Status */
+  --success: #16a34a;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+  --info: #03EABC;
+  --info-foreground: #ffffff;
+
+  /* Surfaces (layered) */
+  --surface-0: #ffffff;
+  --surface-1: #f4f4f5;
+  --surface-2: #e4e4e7;
+  --surface-3: #d4d4d8;
+
+  /* Sidebar */
+  --sidebar: #f4f4f5;
+  --sidebar-foreground: #18181b;
+  --sidebar-accent: #e4e4e7;
+  --sidebar-border: #e4e4e7;
+  --sidebar-primary: #03EABC;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-ring: #0263D1;
+
+  /* Header */
+  --header-bg: #ffffff;
+  --header-border: #e4e4e7;
+  --header-foreground: #09090b;
+
+  /* Table */
+  --table-header: #f4f4f5;
+  --table-row-hover: #f4f4f5;
+
+  /* Skeleton */
+  --skeleton-from: #e4e4e7;
+  --skeleton-to: #f4f4f5;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.05);
+  --shadow-xl: 0 20px 25px rgba(0,0,0,0.1), 0 8px 10px rgba(0,0,0,0.04);
+
+  /* Radius */
+  --radius: 8px;
+
+  /* Brand */
+  --brand-primary: #03EABC;
+  --brand-accent: #0263D1;
+  --brand-radius: 8px;
+
+  /* Motion */
+  --duration-fast: 100ms;
+  --duration-normal: 150ms;
+  --duration-slow: 250ms;
+  --duration-slower: 350ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.76, 0, 0.24, 1);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — DARK THEME
+   ════════════════════════════════════════════════════════════════ */
+.dark {
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #09090b;
+  --card-foreground: #fafafa;
+  --popover: #09090b;
+  --popover-foreground: #fafafa;
+
+  --primary: #03EABC;
+  --primary-foreground: #ffffff;
+  --secondary: #18181b;
+  --secondary-foreground: #fafafa;
+  --muted: #18181b;
+  --muted-foreground: #a1a1aa;
+  --accent: #18181b;
+  --accent-foreground: #fafafa;
+  --destructive: #f87171;
+  --destructive-foreground: #ffffff;
+
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #0263D1;
+
+  --success: #4ade80;
+  --success-foreground: #052e16;
+  --warning: #fbbf24;
+  --warning-foreground: #451a03;
+  --info: #03EABC;
+  --info-foreground: #052e16;
+
+  --surface-0: #09090b;
+  --surface-1: #18181b;
+  --surface-2: #27272a;
+  --surface-3: #3f3f46;
+
+  --sidebar: #09090b;
+  --sidebar-foreground: #fafafa;
+  --sidebar-accent: #18181b;
+  --sidebar-border: #27272a;
+  --sidebar-primary: #03EABC;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-ring: #0263D1;
+
+  --header-bg: #09090b;
+  --header-border: #27272a;
+  --header-foreground: #fafafa;
+
+  --table-header: #18181b;
+  --table-row-hover: #18181b;
+
+  --skeleton-from: #27272a;
+  --skeleton-to: #18181b;
+
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.4);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.5);
+  --shadow-xl: 0 20px 25px rgba(0,0,0,0.6);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TAILWIND CSS VARIABLE MAPPING
+   ════════════════════════════════════════════════════════════════ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-header-bg: var(--header-bg);
+  --color-header-border: var(--header-border);
+  --color-header-foreground: var(--header-foreground);
+  --color-table-header: var(--table-header);
+  --color-table-row-hover: var(--table-row-hover);
+  --color-skeleton-from: var(--skeleton-from);
+  --color-skeleton-to: var(--skeleton-to);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) * 1.5);
+  --radius-xl: calc(var(--radius) * 2);
+  --radius-2xl: calc(var(--radius) * 2.5);
+
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   BASE STYLES
+   ════════════════════════════════════════════════════════════════ */
+html {
+  scroll-behavior: smooth;
+}
+html,
+body {
+  /* `clip`, not `hidden` — deliberately. `overflow-x: hidden` makes the root
+     element a scroll container, which silently disables `position: sticky`
+     for every descendant (the shell glass header and the /demo filter toolbar
+     both failed to stick because of this line). `clip` contains exactly the
+     same horizontal overflow without establishing a scrollport. */
+  overflow-x: clip;
+  max-width: 100vw;
+}
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+}
+
+/* Focus ring — global default */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   SKELETON ANIMATION
+   ════════════════════════════════════════════════════════════════ */
+@keyframes skeleton-pulse {
+  0%, 100% { background-color: var(--skeleton-from); }
+  50% { background-color: var(--skeleton-to); }
+}
+.animate-skeleton {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   SCROLLBAR
+   ════════════════════════════════════════════════════════════════ */
+.dark ::-webkit-scrollbar { width: 6px; height: 6px; }
+.dark ::-webkit-scrollbar-track { background: transparent; }
+.dark ::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 4px; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #525252; }
+.light ::-webkit-scrollbar { width: 6px; height: 6px; }
+.light ::-webkit-scrollbar-track { background: transparent; }
+.light ::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 4px; }
+.light ::-webkit-scrollbar-thumb:hover { background: var(--surface-3); }
+
+/* ════════════════════════════════════════════════════════════════
+   PRINT
+   ════════════════════════════════════════════════════════════════ */
+@media print {
+  .no-print { display: none !important; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   LANDING PAGE ANIMATIONS
+   ════════════════════════════════════════════════════════════════ */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(-30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-12px) rotate(1deg); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px var(--primary); }
+  50%      { box-shadow: 0 0 40px var(--primary); }
+}
+@keyframes grid-move {
+  0%   { transform: translate(0, 0); }
+  100% { transform: translate(40px, 40px); }
+}
+@keyframes count-up {
+  from { opacity: 0; transform: scale(0.5); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(140px) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(140px) rotate(-360deg); }
+}
+@keyframes orbit-reverse {
+  from { transform: rotate(0deg) translateX(100px) rotate(0deg); }
+  to   { transform: rotate(-360deg) translateX(100px) rotate(360deg); }
+}
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes page-exit-3d {
+  to { opacity: 0; transform: perspective(1200px) rotateX(18deg) scale(0.9) translateY(-28px); }
+}
+@keyframes page-enter-3d {
+  from { opacity: 0; transform: perspective(1200px) rotateX(-14deg) scale(0.94) translateY(36px); }
+  to   { opacity: 1; transform: perspective(1200px) rotateX(0deg) scale(1) translateY(0); }
+}
+
+.animate-fade-in-up   { animation: fade-in-up 0.7s ease-out both; }
+.animate-fade-in      { animation: fade-in 0.6s ease-out both; }
+.animate-slide-right  { animation: slide-in-right 0.6s ease-out both; }
+.animate-float        { animation: float 6s ease-in-out infinite; }
+.animate-pulse-glow   { animation: pulse-glow 3s ease-in-out infinite; }
+.animate-gradient     { background-size: 200% 200%; animation: gradient-shift 6s ease infinite; }
+.animate-orbit        { animation: orbit 20s linear infinite; }
+.animate-orbit-reverse{ animation: orbit-reverse 14s linear infinite; }
+.animate-marquee      { animation: marquee 30s linear infinite; }
+
+/* Page transitions — 3D flip out then flip in */
+.animate-page-exit-3d  { animation: page-exit-3d 0.34s ease-in both; }
+.animate-page-enter-3d { animation: page-enter-3d 0.55s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* ── AI assistant floating modal ─────────────────────────────────── */
+@keyframes modal-pop {
+  from { opacity: 0; transform: translateY(30px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes bubble-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes orb-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(3, 234, 188, 0.35); }
+  50%      { box-shadow: 0 0 0 12px rgba(3, 234, 188, 0); }
+}
+@keyframes soundbar {
+  0%, 100% { transform: scaleY(0.3); }
+  50%      { transform: scaleY(1); }
+}
+@keyframes ring-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.animate-modal-pop  { animation: modal-pop 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-bubble-in  { animation: bubble-in 0.3s ease-out both; }
+.animate-orb-pulse  { animation: orb-pulse 2.4s ease-in-out infinite; }
+.animate-ring-spin  { animation: ring-spin 7s linear infinite; }
+
+/* ── Music player ────────────────────────────────────────────────── */
+@keyframes disc-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes glow-breathe {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.9; }
+}
+.animate-disc-spin { animation: disc-spin 9s linear infinite; }
+.animate-glow     { animation: glow-breathe 2.4s ease-in-out infinite; }
+
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+.delay-600 { animation-delay: 600ms; }
+.delay-700 { animation-delay: 700ms; }
+.delay-800 { animation-delay: 800ms; }
+
+/* ════════════════════════════════════════════════════════════════
+   UTILITY CLASSES
+   ════════════════════════════════════════════════════════════════ */
+
+/* Glass effect */
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.dark .glass {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+:not(.dark) .glass {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+/* Text gradient */
+.text-gradient {
+  background: linear-gradient(135deg, #0263D1 0%, #03EABC 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Dot grid background */
+.dot-grid {
+  background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Noise / grain overlay */
+.noise-overlay::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9990;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+/* Animated gradient border */
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.gradient-border {
+  position: relative;
+  background: var(--card);
+  border-radius: 1.5rem;
+}
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--angle), transparent 25%, var(--primary) 50%, transparent 75%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: rotate-border 4s linear infinite;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.gradient-border:hover::before {
+  opacity: 1;
+}
+
+@keyframes rotate-border {
+  from { --angle: 0deg; }
+  to   { --angle: 360deg; }
+}
+
+/* Hover glow ring */
+.hover-ring {
+  position: relative;
+  overflow: hidden;
+}
+.hover-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  box-shadow: inset 0 0 30px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.hover-ring:hover::after {
+  opacity: 1;
+}
+
+/* Smooth reveal mask */
+.reveal-mask {
+  clip-path: inset(0 0 100% 0);
+  transition: clip-path 1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal-mask.revealed {
+  clip-path: inset(0 0 0 0);
+}
+
+/* 3D card depth */
+.card-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-3d:hover {
+  transform: translateZ(30px);
+}
+
+/* Floating particles */
+@keyframes float-particle {
+  0%, 100% { transform: translateY(0) translateX(0) scale(1); opacity: 0.3; }
+  25%      { transform: translateY(-20px) translateX(10px) scale(1.1); opacity: 0.6; }
+  50%      { transform: translateY(-40px) translateX(-5px) scale(0.9); opacity: 0.4; }
+  75%      { transform: translateY(-20px) translateX(-15px) scale(1.05); opacity: 0.5; }
+}
+
+/* Custom cursor — only on fine pointer devices, landing page only */
+@media (pointer: fine) {
+  .landing-cursor body,
+  .landing-cursor a,
+  .landing-cursor button,
+  .landing-cursor [data-cursor-hover] {
+    cursor: none !important;
+  }
+}
+@media (pointer: coarse) {
+  .pointer-events-none.fixed:not(.dock-wrap):not(.rail-wrap):not(.player-wrap) { display: none !important; }
+}
+/* Dock: shown on small screens, any touch device, and narrow desktop widths
+   where the side rail has no room (see .rail-wrap below). Positive media
+   queries only, avoids Tailwind's negated `max-[600px]:` form which Chromium
+   evaluates inconsistently. */
+.dock-wrap { display: none; }
+@media (max-width: 1279px), (pointer: coarse) {
+  .dock-wrap { display: block !important; }
+}
+/* Rail: a column of square tiles that cascades open from a single burger tile,
+   each revealing its label on hover. Structure and motion follow the reference
+   pen; the palette is ours (navy tiles, emerald accent) rather than its purples.
+
+   There is no card. The tiles float straight onto the hero, as they do in the
+   pen, and the label chip that slides out is the only thing with a background.
+
+   The box is exactly one tile tall closed and the full column tall open, and
+   `.rail-wrap` re-centres it as it grows — so the burger ends up at the top of
+   the column and the column stays vertically centred either way.
+
+   The tiles are absolutely positioned *on top of* the burger rather than stacked
+   after it, stacked at `translateY(0)`. That is what produces the pen's
+   "emerging from underneath" cascade: closed they are exactly covered by the
+   burger, and each one becomes visible as it translates clear of the tile above. */
+.rail-wrap { display: none; }
+@media (min-width: 1280px) and (pointer: fine) {
+  .rail-wrap { display: block; }
+}
+.rail {
+  --rail-tile: 56px;
+  --rail-radius: 16px;
+  /* Fallback open height, in tile-widths: nine tiles plus the burger, plus a
+     quarter tile of gap before the auth pair (7 page tiles end at slot 7, the
+     signed-out pair sit at 8.25 and 9.25, so the column bottoms out at 10.25).
+     The landing page overrides this inline from the real auth-tile count -
+     signed in there is one profile tile instead of two, i.e. 9.25 - so keep this
+     in step with the --rail-slots it is shadowing. Kept as a token so the open
+     height stays derivable when the short-window media queries shrink the tile. */
+  --rail-slots: 10.25;
+  --rail-face: linear-gradient(180deg, #1c2b41, #16233a);
+  --rail-face-hi: linear-gradient(180deg, #24354f, #1b2b45);
+  --rail-icon: #aab6c8;
+  --rail-edge: inset 0 0 0 1px rgb(255 255 255 / 0.07);
+  --rail-lift: 0 6px 16px -6px rgb(0 0 0 / 0.55);
+  --rail-hot: linear-gradient(180deg, #05f0c4, #03eabc);
+  --rail-on-dark: #06231f;
+  --rail-text: #f2f4f7;
+  position: relative;
+  width: var(--rail-tile);
+  height: var(--rail-tile);
+  transition: height 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.rail.is-open { height: calc(var(--rail-slots) * var(--rail-tile)); }
+/* Short windows shrink the tile rather than scrolling: the column is a fixed
+   number of slots, so every offset and the open height scale together. */
+@media (min-width: 1280px) and (pointer: fine) and (max-height: 700px) {
+  .rail { --rail-tile: 48px; }
+}
+@media (min-width: 1280px) and (pointer: fine) and (max-height: 580px) {
+  .rail { --rail-tile: 42px; }
+}
+
+/* ── The burger tile, which is also the X ──────────────────────────────────
+   Three bars drawn from one element and its two pseudo-elements, in
+   `currentColor` so the hover colour comes for free. Closed they are a plain
+   burger; open the middle one disappears and the outer two cross at 45°.
+
+   The middle bar is hidden by making the element's own background transparent,
+   NOT by `scaleX(0)`: the outer two bars are its pseudo-element *children*, so
+   any transform on it scales them out of existence too. Measured before this
+   fix — all three bars read `matrix(0, 0, 0, 1, 0, 0)`, i.e. the burger
+   disappeared instead of turning into an X. The pen draws three siblings and
+   can transform each independently; nesting them means only the parent's paint
+   can be switched off. */
+.rail-burger {
+  position: absolute;
+  inset: 0;
+  /* Above the tiles: they have to pass *under* it to read as emerging. */
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--rail-tile);
+  height: var(--rail-tile);
+  padding: 0;
+  border: 0;
+  border-radius: var(--rail-radius);
+  background: var(--rail-face);
+  color: var(--rail-icon);
+  box-shadow: var(--rail-edge), var(--rail-lift);
+  cursor: pointer;
+  transition: background 0.24s ease, color 0.24s ease, box-shadow 0.24s ease;
+}
+.rail-burger:hover { background: var(--rail-face-hi); color: var(--rail-text); }
+.rail-burger-bar {
+  position: relative;
+  display: block;
+  width: 20px;
+  height: 2px;
+  border-radius: 99px;
+  background: currentColor;
+  transition: background-color 0.26s ease;
+}
+.rail-burger-bar::before,
+.rail-burger-bar::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 20px;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 99px;
+  background: currentColor;
+  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.rail-burger-bar::before { transform: translateY(-6px); }
+.rail-burger-bar::after { transform: translateY(6px); }
+.rail.is-open .rail-burger-bar { background-color: transparent; }
+.rail.is-open .rail-burger-bar::before { transform: translateY(0) rotate(45deg); }
+.rail.is-open .rail-burger-bar::after { transform: translateY(0) rotate(-45deg); }
+
+/* ── The tiles ─────────────────────────────────────────────────────────────
+   The hot state is React state (`.is-hot`), never CSS `:hover`. The hero is
+   covered by a full-viewport Sketchfab iframe, and once the pointer enters that
+   nested document the parent stops receiving mouse events, so `:hover` latches
+   and the tile would be left emerald with the cursor nowhere near it. */
+.rail-stack { position: absolute; inset: 0; }
+.rail-tile {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--rail-tile);
+  height: var(--rail-tile);
+  padding: 0;
+  border: 0;
+  border-radius: var(--rail-radius);
+  background: var(--rail-face);
+  color: var(--rail-icon);
+  box-shadow: var(--rail-edge), var(--rail-lift);
+  cursor: pointer;
+  /* `visibility` is transitioned with a delay, not instantly: flipping it at
+     once would clip the tiles out of existence mid-slide on close. It also takes
+     them out of the tab order while hidden, which `opacity: 0` alone would not. */
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0);
+  transition:
+    transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease,
+    background 0.24s ease,
+    color 0.24s ease,
+    box-shadow 0.24s ease,
+    visibility 0s linear 0.42s;
+}
+.rail.is-open .rail-tile {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(calc(var(--slot) * var(--rail-tile)));
+  /* One delay per transitioned property, in the order they are listed above —
+     only the transform staggers. */
+  transition-delay: calc(var(--i) * 45ms), 0s, 0s, 0s, 0s, 0s;
+}
+.rail-tile:hover { background: var(--rail-face-hi); color: var(--rail-text); }
+.rail-tile.is-hot,
+.rail-tile:focus-visible {
+  background: var(--rail-hot);
+  color: var(--rail-on-dark);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.22),
+    0 10px 26px -8px rgb(3 234 188 / 0.45);
+}
+/* The current page keeps a mark while the pointer is elsewhere, so you can
+   always see where you are. It is a ring rather than a fill, because the hot
+   state is already a fill and the two would have to fight over the same tile. */
+.rail-tile.is-current { box-shadow: inset 0 0 0 1px rgb(3 234 188 / 0.55), var(--rail-lift); }
+.rail-tile.is-current.is-hot,
+.rail-tile.is-current:focus-visible { box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.22), 0 10px 26px -8px rgb(3 234 188 / 0.45); }
+.rail-tile:focus-visible { outline: 2px solid var(--rail-text); outline-offset: 3px; }
+.rail-tile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.rail-tile.is-hot .rail-tile-icon { transform: scale(1.08); }
+
+/* ── The label chip ────────────────────────────────────────────────────────
+   In the pen the label is bare accent-coloured text on the page background.
+   Ours sits on a 3D hero, so it gets its own surface: near-black at 94% with a
+   blur behind it, which keeps it readable over anything the model is doing. */
+.rail-tile-label {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 10px);
+  z-index: 3;
+  padding: 7px 13px;
+  border-radius: 12px;
+  background: rgb(11 18 28 / 0.94);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08), 0 8px 20px -8px rgb(0 0 0 / 0.6);
+  color: var(--rail-text);
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-50%) translateX(-6px);
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.rail-tile.is-hot .rail-tile-label,
+.rail-tile:focus-visible .rail-tile-label {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+.rail-burger:focus-visible { outline: 2px solid var(--rail-text); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rail,
+  .rail-burger,
+  .rail-burger-bar,
+  .rail-burger-bar::before,
+  .rail-burger-bar::after,
+  .rail-tile,
+  .rail-tile-icon,
+  .rail-tile-label { transition-duration: 0.01ms !important; }
+  .rail-tile.is-hot .rail-tile-icon { transform: none; }
+}
+
+/* Section divider wave */
+.wave-divider {
+  position: relative;
+}
+.wave-divider::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 1440 80' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 40C360 80 720 0 1080 40C1260 60 1380 50 1440 40V80H0V40Z' fill='currentColor' class='text-background'/%3E%3C/svg%3E") no-repeat bottom center;
+  background-size: cover;
+}
+
+/* Scroll snap sections (optional) */
+@media (min-width: 1024px) {
+  .snap-section {
+    scroll-snap-align: start;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   DEMO PAGE MOTION
+   Scoped to /demo. Scroll reveals are driven by ONE shared
+   IntersectionObserver (src/components/demo/use-scroll-reveal.ts),
+   plus a cursor spotlight on catalog cards, growing section
+   underlines, a sheen sweep and the top scroll-progress bar.
+   prefers-reduced-motion is neutralised globally at the top of
+   this file, and the reveal hook opts out entirely.
+   ════════════════════════════════════════════════════════════════ */
+
+@keyframes demo-underline {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes demo-float-slow {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(0, -30px, 0) scale(1.08); }
+}
+@keyframes demo-sheen {
+  from { transform: translateX(-140%) skewX(-18deg); }
+  to   { transform: translateX(340%) skewX(-18deg); }
+}
+@keyframes demo-progress-sheen {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(320%); }
+}
+
+/* Hidden state is added by the observer only to elements that start below the
+   fold, so anything already on screen never flashes. */
+.reveal-item {
+  opacity: 0;
+  transform: translate3d(0, 22px, 0);
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+.reveal-item.is-revealed {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  will-change: auto;
+}
+
+/* Cursor spotlight — one delegated pointermove writes --mx/--my.
+   `isolation: isolate` keeps the -1 pseudo-element inside the card, above its
+   own background but below its content. */
+.demo-card {
+  position: relative;
+  isolation: isolate;
+}
+@media (hover: hover) and (pointer: fine) {
+  .demo-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    background: radial-gradient(
+      260px circle at var(--mx, 50%) var(--my, 50%),
+      color-mix(in srgb, var(--primary) 18%, transparent),
+      transparent 65%
+    );
+  }
+  .demo-card:hover::before { opacity: 1; }
+}
+
+/* Section underline that grows out of the RTL reading edge. */
+.demo-underline {
+  display: block;
+  height: 2px;
+  width: 100%;
+  border-radius: 999px;
+  transform: scaleX(0);
+  transform-origin: right;
+  background: linear-gradient(to left, var(--primary), #0263D1);
+}
+.is-revealed > .demo-underline,
+.demo-underline.is-revealed {
+  animation: demo-underline 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.15s forwards;
+}
+
+/* Sheen sweep for primary actions and live badges. */
+.demo-sheen { position: relative; overflow: hidden; }
+.demo-sheen::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  transform: translateX(-140%) skewX(-18deg);
+  pointer-events: none;
+}
+.demo-sheen:hover::after { animation: demo-sheen 0.9s ease; }
+
+/* Slow ambient drift for hero glow orbs. */
+.animate-float-slow { animation: demo-float-slow 14s ease-in-out infinite; }
+
+/* Top scroll progress — RTL: fills from the right edge towards the left. */
+.demo-progress-fill {
+  transform: scaleX(var(--demo-progress, 0));
+  transform-origin: right;
+  transition: transform 0.12s linear;
+}
+
+/* Travelling highlight inside the trial progress bar. */
+.demo-progress-sheen {
+  position: absolute;
+  inset-block: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  animation: demo-progress-sheen 2.4s ease-in-out infinite;
+}
+
+/* Stagger children utility */
+.stagger-children > * {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.stagger-children.visible > *:nth-child(1) { transition-delay: 0ms; opacity: 1; transform: translateY(0); }
+.stagger-children.visible > *:nth-child(2) { transition-delay: 80ms; opacity: 1; transform: translateY(0); }
+.stagger-children.visible > *:nth-child(3) { transition-delay: 160ms; opacity: 1; transform: translateY(0); }
+.stagger-children.visible > *:nth-child(4) { transition-delay: 240ms; opacity: 1; transform: translateY(0); }
+.stagger-children.visible > *:nth-child(5) { transition-delay: 320ms; opacity: 1; transform: translateY(0); }
+.stagger-children.visible > *:nth-child(6) { transition-delay: 400ms; opacity: 1; transform: translateY(0); }
+/* Profile success toast: fades itself out, so no client timer is needed. */
+@keyframes profile-flash {
+  0%, 82% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-4px); }
+}
