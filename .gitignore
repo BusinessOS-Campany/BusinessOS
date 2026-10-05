@@ -72,6 +72,15 @@ databases/*.sql
 prod.err.log
 prod.out.log
 
+# Uploaded files written by the dental runtime. `src/lib/storage.ts` resolves its
+# root from `process.cwd()`, which is the tree the app runs in, so this lands
+# inside the source checkout for the master and demo trees. Both already hold an
+# empty serverdata/uploads/imaging, and `/demo/dental` is publicly reachable, so a
+# patient's file would otherwise sit one `git add -A` away from being committed.
+# Per-org clones under orginazition/ are covered by that rule instead. Nothing
+# tracked lives under any serverdata.
+**/serverdata/
+
 # Vendor git history for the sub-app trees that arrived as clones of
 # github.com/gmsnow/dental-Clinic-. Renamed from .git so the platform repo can
 # own our fork changes (basePath, SYSTEM_BASE_PATH, schema wiring); the upstream
