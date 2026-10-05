@@ -442,6 +442,13 @@ The 4 demo cards (`pos`, `cafe`, `laboratory`, `optometry`) are `available` in t
 
 ## 2026-10-05 — THE DENTAL DEMO CARD COULD NOT OPEN, AND THE DENTAL CARD COULD NOT BE INSTALLED (implemented, verified)
 
+> **Milestone numbering in this section is `D1`–`D6`, not `M1`–`M6`.** `M` already means the
+> platform roadmap in [MILESTONES] above (`M3` = Tenant Admin, `M4` = Core Business, `M6` =
+> Workflows/Automations). These dental-rollout steps were originally written as `M1`–`M6`, which
+> made "M6" mean two unrelated things in one file — including, in the outbox worker, a milestone
+> that belongs to the platform roadmap and not to this rollout. Renamed to `D` so a reader who
+> lands on `### D4` knows it is dental and not Core Business.
+
 Two independent dead ends, one shared cause: **the platform derives everything from the
 folder name**, and the dental app had been placed in a folder whose name matched nothing.
 
@@ -554,7 +561,7 @@ other 172 systems were not affected.
 - **Build only against a stopped server.** The platform being down is what made rebuilding
   `.next` safe here. See the 2026-09 `.next`-rewritten-under-a-live-server entry.
 
-### M3 — `system/dental` is now a runnable, platform-mountable system (implemented, verified)
+### D3 — `system/dental` is now a runnable, platform-mountable system (implemented, verified)
 
 `systemContract("dental").missing` went from four items to none. Dental can now be cloned per
 org, built for that org's mount, started by the supervisor, health-checked and signed into —
@@ -604,7 +611,7 @@ fell back to `/dental` and every request under the org mount 404'd, which reads 
 missing route. The supervisor already sets the variable for both phases; anything that starts
 one of these processes by hand has to as well.
 
-### M4 — the SSO relay is now per-system instead of grocery-only (implemented, verified)
+### D4 — the SSO relay is now per-system instead of grocery-only (implemented, verified)
 
 A mounted clone could never hold a session of its own. The proxy asked two questions and both
 were written against grocery's literal `gs_session`: *"does the caller already hold a session for
@@ -671,7 +678,7 @@ mounted-clone session loop could not be exercised over HTTP, and `gm`'s real Gro
 the grocery relay was not driven live either. Routes confirmed after deploy: `/demo` `200`,
 `/demo/dental` → `200` at `/demo/dental/login`, `/demo/dental/login` `200`, `/demo/grocery` `200`,
 `/dental` `308` → `/demo/dental`, `/app/grocery` `401` (auth gate intact). A true mounted session
-round trip belongs to M6.
+round trip belongs to D6.
 
 **Correction to the record:** two findings written down while wiring the demo were wrong and are
 withdrawn above — that `gs_session`/`dc_session` collide on `Path=/` (different names, so they
@@ -686,16 +693,16 @@ one would have left the actual outage untouched.
 
 Everything below is NOT YET IMPLEMENTED. Updated continuously; entries removed only when their milestone's verifiable goals pass.
 
-### Found while wiring the dental demo on 2026-10-05 — M3, M4 and M5 done, M6 open
+### Found while wiring the dental demo on 2026-10-05 — D3, D4 and D5 done, D6 open
 
-- ~~**`system/dental` still cannot be served by the runtime: 4 of 8 contract items are missing.**~~ **RESOLVED 2026-10-05 (M3):** `systemContract("dental").missing` is empty. See the M3 entry above; the gap was `SYSTEM_BASE_PATH`, `api/health`, `api/bos/link` and `prisma/bootstrap.ts`.
-- ~~**`system/dental` would build with plain `next build` (Turbopack)…**~~ **RESOLVED 2026-10-05 (M3):** the build script is `prisma generate && next build --webpack` under a 16 GB heap, and `turbopack.root` is pinned. Verified by building: `✓ Compiled successfully`, **no workspace-root warning**. The pin was genuinely load-bearing — the first M3 build still emitted `⚠ Next.js inferred your workspace root` because the config was rewritten without it, and only the rebuild after adding it came back clean.
+- ~~**`system/dental` still cannot be served by the runtime: 4 of 8 contract items are missing.**~~ **RESOLVED 2026-10-05 (D3):** `systemContract("dental").missing` is empty. See the D3 entry above; the gap was `SYSTEM_BASE_PATH`, `api/health`, `api/bos/link` and `prisma/bootstrap.ts`.
+- ~~**`system/dental` would build with plain `next build` (Turbopack)…**~~ **RESOLVED 2026-10-05 (D3):** the build script is `prisma generate && next build --webpack` under a 16 GB heap, and `turbopack.root` is pinned. Verified by building: `✓ Compiled successfully`, **no workspace-root warning**. The pin was genuinely load-bearing — the first M3 build still emitted `⚠ Next.js inferred your workspace root` because the config was rewritten without it, and only the rebuild after adding it came back clean.
 - ~~**`UPLOAD_DIR` is never injected, so every org would share one imaging folder.**~~ **WITHDRAWN 2026-10-05 — the finding was wrong, and the fix it implies would have been a no-op.** `storage.ts` does fall back to `path.join(process.cwd(), "serverdata", "uploads")`, but `process.cwd()` is not shared: `supervisor.ts:463` spawns each org's child with `cwd: runtime.cwd`, and that is the org's **own clone** at `orginazition/<org>/systems/<slug>/`, created by `cloneSystemForOrg`. So uploads already land in `orginazition/<org>/systems/dental/serverdata/uploads` — one directory per org, the `/api/files/…` route is bound by `resolveFromRoot`, and a re-clone never wipes the target, so a re-clone cannot destroy them either. Injecting `UPLOAD_DIR` would have bought nothing. The third wrong finding in this ledger, and the same mistake each time: reading a plausible mechanism without checking the isolation model it sits in. **What is real is narrower, and it was found while disproving this — see the `serverdata` entry below.**
 - **Uploaded files land inside the source checkout, and the master and demo trees did not ignore them.** `storage.ts` resolves its root from the process's working directory, so for `system/dental` and `demo-systems/dental` — both tracked trees — an upload lands at an untracked-**but-not-ignored** path. `/demo/dental` is publicly reachable, so the first patient to upload through the demo would have put a real file one `git add -A` away from a commit. Both trees already contain an empty `serverdata/uploads/imaging`, so this was a waiting accident rather than a hypothetical. Per-org clones were never at risk: `orginazition/` is ignored at `.gitignore:47`. **RESOLVED 2026-10-05:** `**/serverdata/` is now ignored, chosen over enumerating trees because `saveFile` sanitises its subdirectory to `[A-Za-z0-9_]` rather than allowlisting it, so any name is reachable and a rule could not list them. Nothing tracked lived under any `serverdata` before the change. Covered by `tests/core/upload-isolation.test.ts`, which asks `git check-ignore` directly rather than reimplementing git's rules, and which also pins the two facts per-org isolation actually rests on: that `storage.ts` still resolves from `process.cwd()` and that the supervisor still spawns with `cwd: runtime.cwd`.
-- ~~**`dc_session` is a second session cookie on the same `Path=/` as `gs_session`…**~~ **WITHDRAWN 2026-10-05, the finding was wrong.** Two cookies overwrite each other only when name, domain and path all match, and `gs_session` and `dc_session` are different names — they coexist happily on `Path=/`. Nothing destroys either platform session. What *is* real is worse and was found while fixing this: the runtime proxy hardcoded grocery's name in two places, so a mounted dental clone could never hold a session at all. See the M4 entry above.
+- ~~**`dc_session` is a second session cookie on the same `Path=/` as `gs_session`…**~~ **WITHDRAWN 2026-10-05, the finding was wrong.** Two cookies overwrite each other only when name, domain and path all match, and `gs_session` and `dc_session` are different names — they coexist happily on `Path=/`. Nothing destroys either platform session. What *is* real is worse and was found while fixing this: the runtime proxy hardcoded grocery's name in two places, so a mounted dental clone could never hold a session at all. See the D4 entry above.
 - **The demo and the real system are two copies and will drift, exactly like grocery — but they are not, and cannot be, the same upstream.** `demo-systems/dental` and `system/dental` matched file-for-file when they were placed (217 files, 67 models/enums, 28 pages, identical `schema.prisma` hash) and have now diverged. The decisive fact, found while making the first commit: **both trees are clones of `github.com/gmsnow/dental-Clinic-`** (4 commits, HEAD `b560a27`), not directories this repo authored. A submodule is therefore the wrong instrument — the `basePath`, `SYSTEM_BASE_PATH`, `DATABASE_SCHEMA`, health, link and bootstrap changes are our fork and could never be pushed to the vendor remote, so a fresh clone would get unpatched dental. The nested `.git` directories were renamed to `.git.vendor-backup` (reversible, gitignored) so the platform repo owns the fork and the vendor commits stay recoverable. **Goal: the relationship between the two trees, and the upstream they came from, is declared somewhere a reader can find it.**
 
-### Corrected while implementing M4 on 2026-10-05 — `DATABASE_SCHEMA: "public"` is correct, not a defect
+### Corrected while implementing D4 on 2026-10-05 — `DATABASE_SCHEMA: "public"` is correct, not a defect
 - ~~**`supervisor.ts:442` hardcodes `DATABASE_SCHEMA: "public"` into every org process, so the tenant-schema isolation is inert.**~~ **WITHDRAWN 2026-10-05 — the premise was wrong.** Isolation here is **one PostgreSQL DATABASE per org**, not one schema per org: `ensureOrgDatabase()` runs `CREATE DATABASE org_<folder>` (`src/core/org-vault/database.ts:99`) and `orgDatabaseUrl()` swaps the path component and **deletes `?schema=`** on the way (`:46`). So the child's database is brand new, its tables are created by that system's own migrations, and `public` is the only schema guaranteed to exist — which is precisely what the comment at `:43-46` already said. The dental runtime and seed reading `DATABASE_SCHEMA` is correct and load-bearing for the *demo*, which does share the `demo` database and genuinely needs `dental`; it is simply overridden to `public` for a per-org clone, correctly. Recorded here because the wrong version of this was written down first, and because "verify the isolation model before calling something a leak" is the lesson.
 - **RESOLVED 2026-10-05 — the outbox worker was a global queue, so parallel suites destroyed each other's rows.** `processOutboxBatch(txHost)` selected every org's pending events with no `organizationId` filter. Two test files running in parallel both drained the same table; one file's `afterAll` then deleted rows the other was midway through updating, and Prisma raised `P2025` ("No record was found for an update") out of the batch. It presented as two unrelated-looking failures in `m6-workflows` that passed when the file ran alone, and was twice dismissed as noise before being diagnosed. Two fixes, both real rather than test-only: `processOutboxBatch` now takes an optional `organizationId` scope, which every per-tenant caller should pass and the four `m6-workflows` call sites now do; and `processOneEvent` treats `P2025` as "the row is gone" and returns instead of retrying, because retrying or dead-lettering a deleted row fails identically and that second failure was what escaped and cost the batch its other 49 events. Any other error still propagates, pinned by a test so the guard cannot grow into swallowing real faults. Production value is not hypothetical either: `startWorker` runs one global loop over every org, so an org deleted with events still queued could previously crash a whole batch. Five consecutive full-suite runs green at 714/714 across 55 files, against roughly one failure in six before. **Not fixed, and worth knowing: two workers can still select the same event before either marks it `processing`, so actions are not claimed atomically. That needs `updateMany` with a status guard rather than a read-then-write, and it did not cause this flake.**
 
