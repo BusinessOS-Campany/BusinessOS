@@ -1,5 +1,6 @@
-// Per-organization bootstrap. Reference data only: the ten system roles the app
-// authorises against. No demo users, no sample patients.
+// Per-organization bootstrap: the ten system roles the app authorises against,
+// plus the one clinic and branch the app assumes already exist. No demo users, no
+// sample patients.
 //
 // This is deliberately NOT `prisma/seed.ts`. The seed is a development fixture:
 // it creates an admin plus a full cast of staff on one published password and
@@ -7,11 +8,16 @@
 // database would hand every org the same logins. This file instead tops up a
 // real org's database, and is safe to run on every start.
 //
+// The clinic and branch are the org's own, empty and neutrally named, for its
+// staff to extend. See `org-structure.ts` for the four `findFirstOrThrow`
+// fallbacks that make them a hard requirement rather than a nicety.
+//
 // Run: npx tsx prisma/bootstrap.ts
 import "dotenv/config"
 import { PrismaClient } from "../src/generated/prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { ROLE_DEFINITIONS, ROLE_KEYS, type RoleKey } from "../src/lib/permissions"
+import { ensureOrgStructure } from "./org-structure"
 
 // Same schema the runtime uses: the adapter reports `public` unless told the
 // schema, and a seeded org in its own schema would otherwise write to `public`.
@@ -56,10 +62,14 @@ async function main() {
     }
   }
 
+  const structure = await ensureOrgStructure(prisma)
+
   console.log(
     `[bootstrap] schema=${process.env.DATABASE_SCHEMA ?? "public"} ` +
       `roles=${ROLE_KEYS.length} created=${created.length > 0 ? created.join("+") : "none"} ` +
-      `permissionsFilled=${permissionsFilled.length > 0 ? permissionsFilled.join("+") : "none"} ok`,
+      `permissionsFilled=${permissionsFilled.length > 0 ? permissionsFilled.join("+") : "none"} ` +
+      `clinic=${structure.clinicCreated ? "created" : "present"} ` +
+      `branch=${structure.branchCreated ? "created" : "present"} ok`,
   )
 }
 

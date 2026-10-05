@@ -68,6 +68,27 @@ export function openRouteForSlug(slug: string): string | null {
 }
 
 /**
+ * Systems the deployment can clone and serve per org: `listSystemSources()`.
+ *
+ * This is deliberately NOT `REAL_SYSTEM_ROUTES`. That table answers a different
+ * question — "does this system have an in-shell module under `/app/<slug>`?" —
+ * and one lookup was answering both, which held only because grocery satisfied
+ * both. Dental does not: it has a runnable `system/dental/` source and no
+ * in-shell module, so the shared lookup fell through to the demo registry and
+ * called it `demo`. Putting dental in `REAL_SYSTEM_ROUTES` would not fix that,
+ * it would break seeding instead: `catalog-seed.ts` refuses to re-point a
+ * curated card at a slug in that table.
+ *
+ * Passed in rather than read here so this module stays free of the filesystem,
+ * the same bargain `installableCardIds` keeps with `sourceSlugs`.
+ */
+type SourceSlugs = readonly string[];
+
+export function servesPerOrg(slug: string, sourceSlugs: SourceSlugs = []): boolean {
+  return slug in REAL_SYSTEM_ROUTES || sourceSlugs.includes(slug);
+}
+
+/**
  * Where a system card leads a *specific* organization.
  *
  * A real system is not a page on the platform, it is that org's own copy of a
@@ -81,24 +102,35 @@ export function openRouteForSlug(slug: string): string | null {
  * resolves through the session, and guessing an org would be worse than saying
  * nothing about one.
  */
-export function openRouteForOrgSlug(slug: string, orgSlug: string | null | undefined): string | null {
-  if (slug in REAL_SYSTEM_ROUTES) {
-    return orgSlug ? orgSystemPath(orgSlug, slug) : REAL_SYSTEM_ROUTES[slug];
+export function openRouteForOrgSlug(
+  slug: string,
+  orgSlug: string | null | undefined,
+  sourceSlugs: SourceSlugs = [],
+): string | null {
+  if (servesPerOrg(slug, sourceSlugs)) {
+    if (orgSlug) return orgSystemPath(orgSlug, slug);
+    // With no org to name, a cloneable system has no org-less home. Its demo
+    // mount is the closest honest answer, and is what this returned before.
+    return REAL_SYSTEM_ROUTES[slug] ?? liveHref(slug);
   }
   return openRouteForSlug(slug);
 }
 
-export function systemKind(slug: string): SystemKind {
-  if (slug in REAL_SYSTEM_ROUTES) return "real";
+export function systemKind(slug: string, sourceSlugs: SourceSlugs = []): SystemKind {
+  if (servesPerOrg(slug, sourceSlugs)) return "real";
   return liveHref(slug) ? "demo" : "none";
 }
 
-export function isDemoSystem(slug: string): boolean {
-  return systemKind(slug) === "demo";
+export function isDemoSystem(slug: string, sourceSlugs: SourceSlugs = []): boolean {
+  return systemKind(slug, sourceSlugs) === "demo";
 }
 
-export function openRouteForSystem(slug: string): SystemOpenRoute {
-  return { slug, route: openRouteForSlug(slug), kind: systemKind(slug) };
+export function openRouteForSystem(slug: string, sourceSlugs: SourceSlugs = []): SystemOpenRoute {
+  return {
+    slug,
+    route: openRouteForOrgSlug(slug, null, sourceSlugs),
+    kind: systemKind(slug, sourceSlugs),
+  };
 }
 
 /**
@@ -234,7 +266,12 @@ export const DEMO_CATALOG_META: readonly CatalogSeedMeta[] = [
     descriptionAr: "إدارة المرضى والحشوات والتركيبات والمختبر وفواتير العيادات.",
     icon: "smile",
     category: "health",
-    version: "1.0.0-demo",
+    // No `-demo` suffix, unlike its siblings below. Dental is also a system an org
+    // clones and owns, and this string reaches the customer's profile card as the
+    // version of *their* install (`organizationApp.version`), so `1.0.0-demo` was
+    // printed next to a clone that was running. Grocery is both real and demo too
+    // and carries a plain `1.0.0`.
+    version: "1.0.0",
     routePrefix: "/dental",
   },
   {

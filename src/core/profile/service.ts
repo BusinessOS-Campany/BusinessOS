@@ -4,6 +4,7 @@ import { ApiError } from "@/core/http/api";
 import { displayIdentifier, findCountry, formatInternational, isInternalAuthEmail } from "@/core/auth/identifier";
 import { dbSchema } from "@/core/db/client";
 import { openRouteForOrgSlug } from "@/core/systems/catalog";
+import { listSystemSources } from "@/core/org-vault/system-sources";
 import { orgSystemDisplayName } from "@/core/apps/settings";
 import {
   normalizeExtras, normalizePreferences, normalizeSocials, normalizeMediaRef, normalizeUsername,
@@ -221,7 +222,7 @@ export async function getProfileOverview(profile: ProfileSession): Promise<Profi
     routePrefix: o.app.routePrefix,
     // Under the org, not under `/app`: a real system is that org's own copy of a
     // codebase, mounted at `/{org}/{system}`. Demo systems keep their own route.
-    route: openRouteForOrgSlug(o.app.slug, o.organization.slug),
+    route: openRouteForOrgSlug(o.app.slug, o.organization.slug, listSystemSources()),
     version: o.app.version,
     status: o.status,
     organizationId: o.organization.id,

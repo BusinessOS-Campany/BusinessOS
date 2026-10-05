@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import type { CatalogEntry } from "@/core/apps/service";
 import type { Dictionary, Locale } from "@/core/i18n/dictionaries";
-import { systemKind } from "@/core/systems/catalog";
 
 type AppDraft = {
   slug: string;
@@ -231,7 +230,10 @@ export function SystemsManager({
             </thead>
             <tbody>
               {filtered.map((app) => {
-                const kind = systemKind(app.slug);
+                // Server-classified: a browser cannot read the deployment's
+                // `system/` listing, so recomputing here mislabels every
+                // cloneable per-org system as a demo.
+                const kind = app.kind;
                 return (
                   <tr key={app.id} className="border-b border-neutral-800/70 last:border-0 hover:bg-white/[0.02]">
                     <td className="px-4 py-3">

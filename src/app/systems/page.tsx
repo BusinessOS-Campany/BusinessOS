@@ -51,17 +51,18 @@ async function cardStatesFor(
 
   const installedIds = new Set(installed.map((r) => r.app.slug));
   const pendingIds = new Set(pending.map((r) => r.app.slug));
+  const sourceSlugs = listSystemSources();
   const installable = installableCardIds({
     cardIds,
     activeSlugs: apps.map((a) => a.slug),
-    sourceSlugs: listSystemSources(),
+    sourceSlugs,
   });
 
   for (const id of cardIds) {
     // A pending request outranks nothing else: the tenant already asked, so the
     // card's job is to say "waiting", not to offer the button again.
     if (installedIds.has(id)) {
-      states[id] = { state: "installed", route: openRouteForOrgSlug(id, orgSlug) };
+      states[id] = { state: "installed", route: openRouteForOrgSlug(id, orgSlug, sourceSlugs) };
     } else if (pendingIds.has(id)) {
       states[id] = { state: "pending" };
     } else if (installable.has(id)) {

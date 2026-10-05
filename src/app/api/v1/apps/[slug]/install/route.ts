@@ -3,6 +3,7 @@ import { requireTenantContext } from "@/core/tenancy/context";
 import { requirePermission } from "@/core/db/tenant-guard";
 import { orgSystemNeedsBuild, requestSystemForTenant } from "@/core/apps/service";
 import { openRouteForOrgSlug } from "@/core/systems/catalog";
+import { listSystemSources } from "@/core/org-vault/system-sources";
 import { prisma } from "@/core/db/client";
 import { ApiError } from "@/core/http/api";
 
@@ -81,7 +82,7 @@ export const GET = withRoute<{ params: Promise<{ slug: string }> }>(
 
     return ok({
       state: orgSystemNeedsBuild(org?.slug ?? "", slug) ? "preparing" : "installed",
-      route: openRouteForOrgSlug(slug, org?.slug),
+      route: openRouteForOrgSlug(slug, org?.slug, listSystemSources()),
     });
   },
 );

@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { sharedPrisma } from "@/core/db/client";
-import { openRouteForSlug, openRouteForSystem, REAL_SYSTEM_ROUTES, systemKind } from "@/core/systems/catalog";
+import { openRouteForSlug, openRouteForSystem, servesPerOrg, systemKind } from "@/core/systems/catalog";
+import { listSystemSources } from "./system-sources";
 import {
   appendJsonLine,
   ensureOrgVaultDirs,
@@ -88,10 +89,12 @@ export async function buildSystemsManifest(orgId: string): Promise<Record<string
     orderBy: { createdAt: "desc" },
   });
 
+  const sourceSlugs = listSystemSources();
+
   return {
     generatedAt: new Date().toISOString(),
     installed: installed.map((link) => {
-      const route = openRouteForSystem(link.app.slug);
+      const route = openRouteForSystem(link.app.slug, sourceSlugs);
       return {
         slug: link.app.slug,
         name: link.app.name,
@@ -100,10 +103,10 @@ export async function buildSystemsManifest(orgId: string): Promise<Record<string
         category: link.app.category,
         version: link.version,
         installStatus: link.status,
-        kind: systemKind(link.app.slug),
+        kind: systemKind(link.app.slug, sourceSlugs),
         route: route.route,
         routePrefix: link.app.routePrefix,
-        isRealSystem: link.app.slug in REAL_SYSTEM_ROUTES,
+        isRealSystem: servesPerOrg(link.app.slug, sourceSlugs),
         schemaKey: link.app.schemaKey ?? null,
         capabilities: link.app.capabilities,
         configuration: link.configuration ?? null,
@@ -126,7 +129,7 @@ export async function buildSystemsManifest(orgId: string): Promise<Record<string
     counts: {
       installed: installed.length,
       pending: requests.filter((r) => r.status === "pending").length,
-      real: installed.filter((link) => link.app.slug in REAL_SYSTEM_ROUTES).length,
+      real: installed.filter((link) => servesPerOrg(link.app.slug, sourceSlugs)).length,
     },
   };
 }

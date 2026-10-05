@@ -13,7 +13,7 @@ import {
   type SystemKind,
 } from "@/core/systems/catalog";
 import { getSystemById } from "@/core/demo/systems-catalog";
-import { cloneSystemForOrg, type CloneResult } from "@/core/org-vault/system-clone";
+import { cloneSystemForOrg, listSystemSources, type CloneResult } from "@/core/org-vault/system-clone";
 import { hasSystemSource, systemContract } from "@/core/org-vault/system-sources";
 import { getVaultEntry, upsertVaultEntry } from "@/core/org-vault/registry";
 import { orgVaultPaths, readJsonFile } from "@/core/org-vault/paths";
@@ -262,7 +262,7 @@ export async function requestSystemForTenant(
     // The card the customer clicks after installing leads under the org, because
     // that is where the org's own copy of the system is mounted.
     const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { slug: true } });
-    const route = openRouteForOrgSlug(app.slug, org?.slug);
+    const route = openRouteForOrgSlug(app.slug, org?.slug, listSystemSources());
     return { state: "installed", requestId: null, route, created: false };
   }
 
@@ -391,7 +391,7 @@ export async function installSystemForOrg(
 
   // Both outcomes lead under the org that asked, because that is where its own
   // copy is mounted either way.
-  const route = openRouteForOrgSlug(app.slug, org.slug);
+  const route = openRouteForOrgSlug(app.slug, org.slug, listSystemSources());
 
   const existing = await prisma.organizationApp.findUnique({
     where: { organizationId_appId: { organizationId, appId: app.id } },
@@ -638,6 +638,7 @@ function toCatalogEntry(
   },
   installCount: number,
   requestCount: number,
+  sourceSlugs: readonly string[] = [],
 ): CatalogEntry {
   return {
     id: row.id,
@@ -656,7 +657,7 @@ function toCatalogEntry(
     isActive: row.isActive,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    kind: systemKind(row.slug),
+    kind: systemKind(row.slug, sourceSlugs),
     route: openRouteForSlug(row.slug),
     installCount,
     requestCount,
@@ -684,9 +685,10 @@ export async function getAppCatalog(): Promise<CatalogEntry[]> {
 
   const installsMap = new Map(installs.map((r) => [r.appId, r._count.appId] as const));
   const requestsMap = new Map(requests.map((r) => [r.appId, r._count.appId] as const));
+  const sourceSlugs = listSystemSources();
 
   return rows.map((row) =>
-    toCatalogEntry(row, installsMap.get(row.id) ?? 0, requestsMap.get(row.id) ?? 0),
+    toCatalogEntry(row, installsMap.get(row.id) ?? 0, requestsMap.get(row.id) ?? 0, sourceSlugs),
   );
 }
 
@@ -727,7 +729,7 @@ export async function upsertCatalogApp(input: CatalogAppInput): Promise<CatalogE
     },
   });
 
-  return toCatalogEntry(row, 0, 0);
+  return toCatalogEntry(row, 0, 0, listSystemSources());
 }
 
 /** Admin availability toggle (isActive / status) — guarded against last real removal. */
@@ -754,7 +756,7 @@ export async function updateCatalogApp(
   const requestCount = await prisma.organizationAppRequest.count({
     where: { appId: updated.id, status: "pending" },
   });
-  return toCatalogEntry(updated, installCount, requestCount);
+  return toCatalogEntry(updated, installCount, requestCount, listSystemSources());
 }
 
 /** Admin delete — refused while any org has it installed or requested. */
@@ -834,9 +836,14 @@ export async function getCustomerMarketplace(
   const installedMap = new Map(installed.map((r) => [r.appId, true] as const));
   const requestMap = new Map(requests.map((r) => [r.appId, true] as const));
   const favMap = new Map(favorites.map((r) => [r.appId, true] as const));
+  // One `readdirSync` for the whole catalog, not one per row.
+  const sourceSlugs = listSystemSources();
 
   return rows.map((row) => {
-    const kind = systemKind(row.slug);
+    // `kind` is per-row, but the answer depends on one fact about the deployment
+    // that is the same for every row: which systems it can clone and serve per
+    // org. Read it once so a 200-row catalog does not stat the disk 200 times.
+    const kind = systemKind(row.slug, sourceSlugs);
     // The curated catalog is the source of truth for "coming soon", read by slug
     // so a system that becomes available needs no re-seed of a stored flag.
     const soon = getSystemById(row.slug)?.status === "soon";
@@ -875,7 +882,7 @@ export async function getCustomerMarketplace(
       route:
         kind === "real" && !installed
           ? null
-          : (openRouteForOrgSlug(row.slug, org?.slug) ?? row.routePrefix),
+          : (openRouteForOrgSlug(row.slug, org?.slug, sourceSlugs) ?? row.routePrefix),
       state: installState({
         appIsActive: row.isActive,
         installed,
@@ -883,6 +890,10 @@ export async function getCustomerMarketplace(
         // outstanding; a demo or an in-shell module is servable as it stands.
         needsBuild: installed && kind === "real" ? orgSystemNeedsBuild(org?.slug ?? "", row.slug) : false,
         hasPendingRequest: requestMap.get(row.id) === true,
+        // A system that is BOTH cloneable per org and publicly demoable is `real`,
+        // so this only reports "demo" when there is genuinely no org-side copy —
+        // otherwise the card would offer no install and no build for a system the
+        // marketplace's own `installableCardIds` gate already counts installable.
         isDemo: kind === "demo",
         soon,
       }),

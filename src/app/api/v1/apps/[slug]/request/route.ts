@@ -5,6 +5,7 @@ import { requirePermission } from "@/core/db/tenant-guard";
 import { installState, openRouteForSlug, systemKind } from "@/core/systems/catalog";
 import { writeAuditLog } from "@/core/audit/service";
 import { requestSystemForTenant } from "@/core/apps/service";
+import { listSystemSources } from "@/core/org-vault/system-sources";
 
 /**
  * POST /api/v1/apps/[slug]/request
@@ -38,7 +39,7 @@ export const POST = withRoute(
       throw ApiError.badRequest("This system is not available right now");
     }
 
-    const kind = systemKind(slug);
+    const kind = systemKind(slug, listSystemSources());
     const route = openRouteForSlug(slug);
 
     const existing = await prisma.organizationApp.findUnique({

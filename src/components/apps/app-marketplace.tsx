@@ -26,7 +26,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { MarketplaceEntry } from "@/core/apps/service";
-import { systemKind } from "@/core/systems/catalog";
 import { CATEGORY_MAP } from "@/core/demo/systems-catalog";
 import { t, type Dictionary, type Locale } from "@/core/i18n/dictionaries";
 import { revealDelay, spotlightFromEvent, useScrollReveal } from "@/components/demo/use-scroll-reveal";
@@ -562,7 +561,11 @@ export function AppMarketplace({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((app, i) => {
             const Icon = ICONS[app.icon ?? ""] ?? Box;
-            const kind = systemKind(app.slug);
+            // The server already classified this row. Recomputing it here would
+            // need the deployment's `system/` listing, which a browser cannot
+            // read — so the badge would claim "demo" for a system the marketplace
+            // had correctly resolved as a per-org real install.
+            const kind = app.kind;
             const label = STATE_LABEL[app.state];
             return (
               <div
