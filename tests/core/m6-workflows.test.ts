@@ -261,7 +261,7 @@ describe("M6.1: Idempotent event handling", () => {
     });
 
     // Process the outbox batch
-    const result = await processOutboxBatch(prisma);
+    const result = await processOutboxBatch(prisma, orgId);
     expect(result.processed).toBeGreaterThanOrEqual(1);
 
     // Check EXACTLY ONE NEW notification was created for this test
@@ -314,7 +314,7 @@ describe("M6.2: Webhook retry and execution log", () => {
       });
     });
 
-    await processOutboxBatch(prisma);
+    await processOutboxBatch(prisma, orgId);
 
     const eventAfter = await prisma.outboxEvent.findFirst({
       where: { organizationId: orgId, dedupeKey },
@@ -368,7 +368,7 @@ describe("M6.2: Webhook retry and execution log", () => {
         });
       });
 
-      await processOutboxBatch(prisma);
+      await processOutboxBatch(prisma, orgId);
 
       const executions = await prisma.workflowExecution.findMany({
         where: { organizationId: orgId, ruleId: rule.id },
@@ -432,7 +432,7 @@ describe("M6.2: Webhook retry and execution log", () => {
         },
       });
 
-      await processOutboxBatch(prisma);
+      await processOutboxBatch(prisma, orgId);
 
       const event = await prisma.outboxEvent.findFirst({
         where: { organizationId: orgId, dedupeKey },

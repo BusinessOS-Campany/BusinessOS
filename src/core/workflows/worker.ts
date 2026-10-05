@@ -16,15 +16,41 @@ import { executeAction } from "./actions";
 const BATCH_SIZE = 50;
 const BASE_BACKOFF_MS = 60_000; // 1 minute
 
-/** Process a batch of pending outbox events. Called by the polling worker. */
+/**
+ * Prisma's "record required but not found" code.
+ *
+ * Raised by `update`/`delete` when the row is gone. For this worker that means the
+ * event disappeared between our SELECT and our UPDATE — another worker claimed it,
+ * or the org was deleted while its events were still queued. There is nothing left
+ * to record a retry on, so it must not be mistaken for an action failure.
+ */
+function isRecordGone(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: unknown }).code === "P2025"
+  );
+}
+
+/**
+ * Process a batch of pending outbox events. Called by the polling worker.
+ *
+ * `organizationId` scopes the drain to one org. Omitting it processes every org's
+ * events, which is what the production poll wants, but it means a caller cannot
+ * reason about its own batch: two orgs draining at once take each other's rows.
+ * Callers that know whose queue they are working on — every per-tenant caller, and
+ * tests running in parallel — should pass it.
+ */
 export async function processOutboxBatch(
   txHost: Prisma.TransactionClient | PrismaClient = prisma,
+  organizationId?: string,
 ): Promise<{ processed: number; failed: number }> {
   const now = new Date();
 
   // Fetch pending events ready to run (nextRunAt <= now).
   const events = await txHost.outboxEvent.findMany({
     where: {
+      ...(organizationId ? { organizationId } : {}),
       status: { in: ["pending", "failed"] },
       attempt: { lt: 5 },
       OR: [
@@ -134,6 +160,10 @@ async function processOneEvent(
 
     return true;
   } catch (err) {
+    // The event is gone. Retrying or dead-lettering would fail the same way, and
+    // letting that escape costs the batch every other event it was holding.
+    if (isRecordGone(err)) return false;
+
     // Retry with exponential backoff.
     const nextAttempt = event.attempt + 1;
     const backoffMs = BASE_BACKOFF_MS * Math.pow(2, event.attempt);
