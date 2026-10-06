@@ -1,0 +1,33 @@
+#!/bin/sh
+# Auto-push after every commit so the working copy and the remote never diverge.
+#
+# Registered via core.hooksPath=.githooks, which is tracked in the repo, so a
+# fresh clone on another machine gets this behaviour from scripts/install-git-hooks.mjs.
+#
+# A post-commit hook cannot change the commit it fires after, so a failed push is
+# reported and then swallowed: the commit stays local and the next successful
+# commit retries it. Never exit non-zero -- that would look like a commit failure.
+#
+# Not run for WIP/squash merges, amends of already-pushed commits, or when there
+# is no remote configured yet.
+
+remote=$(git config --get branch.$(git rev-parse --abbrev-ref HEAD).remote 2>/dev/null)
+
+if [ -z "$remote" ]; then
+  echo "post-commit: no remote for this branch, skipping push."
+  exit 0
+fi
+
+if [ -n "$SKIP_AUTO_PUSH" ]; then
+  echo "post-commit: SKIP_AUTO_PUSH set, skipping push."
+  exit 0
+fi
+
+if ! git push "$remote" HEAD; then
+  echo ""
+  echo "post-commit: push to '$remote' failed. Your commit is safe locally."
+  echo "  Resolve it, then run: git push $remote HEAD"
+  echo "  Or commit again to retry automatically."
+fi
+
+exit 0
