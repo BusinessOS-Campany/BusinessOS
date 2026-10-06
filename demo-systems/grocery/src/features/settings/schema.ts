@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { APPEARANCE_FONTS, APPEARANCE_PRESETS } from "./appearance";
 
 /**
  * Logo value may be an external URL (legacy) or a stored object path
@@ -48,8 +49,34 @@ export const securitySettingsSchema = z.object({
   lockoutMinutes: z.coerce.number().int().min(1).max(1440),
 });
 
+/**
+ * Colours are `#rrggbb` only — never free-form CSS. That keeps validation a
+ * regex, keeps the emitted stylesheet free of interpolated user input, and
+ * keeps the contrast maths in appearance.ts exact.
+ */
+const hexColor = z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "expected #rrggbb");
+/** Empty string is the form's "use the built-in default" signal. */
+const optionalHex = z.union([z.literal(""), hexColor]).optional();
+
+export const appearanceSettingsSchema = z.object({
+  themePreset: z
+    .union([z.literal(""), z.string().trim().max(40)])
+    .refine((v) => v === "" || APPEARANCE_PRESETS.some((p) => p.id === v), "unknown preset")
+    .optional(),
+  themePrimary: optionalHex,
+  themePrimaryDark: optionalHex,
+  themeBackground: optionalHex,
+  themeBackgroundDark: optionalHex,
+  themeFont: z
+    .union([z.literal(""), z.string().trim()])
+    .refine((v) => v === "" || APPEARANCE_FONTS.some((f) => f.id === v), "unknown font")
+    .optional(),
+  themeRadius: z.union([z.literal(""), z.coerce.number().int().min(0).max(30)]).optional(),
+});
+
 export type StoreSettingsInput = z.infer<typeof storeSettingsSchema>;
 export type SalesSettingsInput = z.infer<typeof salesSettingsSchema>;
 export type InventorySettingsInput = z.infer<typeof inventorySettingsSchema>;
 export type LocalizationSettingsInput = z.infer<typeof localizationSettingsSchema>;
 export type SecuritySettingsInput = z.infer<typeof securitySettingsSchema>;
+export type AppearanceSettingsInput = z.infer<typeof appearanceSettingsSchema>;

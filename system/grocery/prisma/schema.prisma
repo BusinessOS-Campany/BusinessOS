@@ -923,6 +923,13 @@ model SystemSettings {
   sessionTimeoutMinutes Int     @default(480)
   maxLoginAttempts      Int     @default(5)
   lockoutMinutes        Int     @default(15)
+  themePreset          String?
+  themePrimary         String?
+  themePrimaryDark     String?
+  themeBackground      String?
+  themeBackgroundDark  String?
+  themeFont            String?
+  themeRadius          Int?
   updatedAt             DateTime @updatedAt
 
   @@map("system_settings")

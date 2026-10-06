@@ -70,6 +70,10 @@ const ar = {
     recentSales: "أحدث المبيعات", invoice: "الفاتورة", cashier: "أمين الصندوق", paymentMethod: "طريقة الدفع",
     lowStockPanel: "منتجات منخفضة المخزون", expiringPanel: "منتجات قريبة الانتهاء",
     vsYesterday: "مقارنة بالأمس",
+    quickNav: "تنقّل سريع",
+    quickNavCustomersHint: "قائمة العملاء وأرصدتهم وحساباتهم الآجلة",
+    quickNavStorageHint: "أرصدة الأصناف وقيمتها وما قارب النفاد",
+    quickNavTransactionsHint: "سجل معاملات العملاء الآجلة والمدفوعات",
   },
   products: {
     title: "المنتجات", addProduct: "منتج جديد", editProduct: "تعديل المنتج",

@@ -1,14 +1,17 @@
 ﻿import Link from "next/link";
 import {
-  AlertTriangle, Boxes, CalendarClock, PackageX, ShoppingCart,
-  TrendingDown, TrendingUp, Truck, UsersRound,
+  AlertTriangle, Boxes, CalendarClock, ChevronLeft, CreditCard, PackageX, ShoppingCart,
+  TrendingDown, TrendingUp, Truck, UsersRound, Warehouse, type LucideIcon,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getT } from "@/shared/i18n";
 import { formatMoney, formatNumber, formatDateTime, formatDate } from "@/shared/core/format";
+import { getCurrentUser } from "@/features/auth/session";
+import { hasPermission } from "@/shared/auth/rbac";
+import { cn } from "@/lib/utils";
 import {
   getDashboardKpis, getRecentSales, listExpiringBatches, listLowStock,
   getSalesByCategory, getSalesSeries, getTopProducts, type ChartRange,
@@ -17,6 +20,16 @@ import { StatCard } from "@/features/dashboard/ui/stat-card";
 import { SalesChartLazy } from "@/features/dashboard/ui/sales-chart-lazy";
 
 const RANGES: ChartRange[] = ["today", "week", "month", "year"];
+
+interface QuickNavItem {
+  href: string;
+  icon: LucideIcon;
+  tone: string;
+  title: string;
+  hint: string;
+  permission: string;
+  meta?: string;
+}
 
 export default async function DashboardPage({
   searchParams,
@@ -44,6 +57,38 @@ export default async function DashboardPage({
 
   const catTotal = categories.reduce((a, c) => a + c.value, 0);
   const catColors = ["var(--color-chart-1)", "var(--color-chart-2)", "var(--color-chart-3)", "var(--color-chart-4)", "var(--color-chart-5)", "var(--muted-foreground)"];
+
+  // Cached per request — the shell layout already resolved this user.
+  const permissions = (await getCurrentUser())?.permissions ?? [];
+  const quickNav: QuickNavItem[] = [
+    {
+      href: "/customers/list",
+      icon: UsersRound,
+      tone: "bg-primary",
+      title: t.nav.customersList,
+      hint: t.dashboard.quickNavCustomersHint,
+      permission: "customers.view",
+      meta: `${t.dashboard.totalCustomers} · ${formatNumber(kpis.totalCustomers, locale)}`,
+    },
+    {
+      href: "/inventory/stock",
+      icon: Warehouse,
+      tone: "bg-emerald-600",
+      title: t.nav.stock,
+      hint: t.dashboard.quickNavStorageHint,
+      permission: "inventory.view",
+      meta: `${t.dashboard.totalProducts} · ${formatNumber(kpis.totalProducts, locale)}`,
+    },
+    {
+      href: "/customers/transactions",
+      icon: CreditCard,
+      tone: "bg-amber-600",
+      title: t.nav.customerTransactions,
+      hint: t.dashboard.quickNavTransactionsHint,
+      permission: "customers.credit",
+    },
+  ];
+  const visibleQuickNav = quickNav.filter((item) => hasPermission(permissions, item.permission));
 
   return (
     <div className="space-y-6">
@@ -74,6 +119,41 @@ export default async function DashboardPage({
         <StatCard title={t.dashboard.outOfStock} value={formatNumber(kpis.outOfStock, locale)} icon={PackageX} tone="danger" />
         <StatCard title={t.dashboard.totalCustomers} value={formatNumber(kpis.totalCustomers, locale)} icon={UsersRound} />
       </div>
+
+      {/* Quick navigation — whole card is the link target */}
+      {visibleQuickNav.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-base font-semibold tracking-tight">{t.dashboard.quickNav}</h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleQuickNav.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Card size="sm" className="h-full transition-colors hover:bg-accent/50">
+                  <CardHeader className="flex-row items-center gap-3 space-y-0">
+                    <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg", item.tone)}>
+                      <item.icon className="size-5 text-white" aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <CardTitle className="truncate">{item.title}</CardTitle>
+                      <CardDescription className="line-clamp-2">{item.hint}</CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex items-center gap-2 text-xs">
+                    {item.meta && <span className="truncate text-muted-foreground">{item.meta}</span>}
+                    <span className="ms-auto flex shrink-0 items-center gap-1 font-medium text-primary">
+                      {t.common.view}
+                      <ChevronLeft className="size-3.5" aria-hidden />
+                    </span>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Charts */}
       <div className="grid gap-4 lg:grid-cols-3">

@@ -155,6 +155,20 @@ Soft delete: Product, Customer, Supplier, User (deletedAt flag; financial record
 - HTTP smoke: `/login` 200 with form; `/dashboard` 307 redirect when unauthenticated.
 - Known lint note: product-form.tsx has an informational `react-hooks/incompatible-library` warning (RHF `watch()`) — expected, compiler just skips memoizing that component. Only remaining lint warning.
 
+## 2026-10-06 — DASHBOARD QUICK-NAV CARDS (customers → storage → transactions)
+
+- **What was added**: a "تنقّل سريع" section on `(app)/dashboard`, between the KPI grid and the charts. Three whole-card `next/link` targets — العملاء → `/customers/list`, أرصدة المخزون → `/inventory/stock`, الآجل والمدفوعات → `/customers/transactions`. Those are the routes that already existed; nothing was renamed or moved.
+- **Counters are real, not decorative**: the Customers card prints `kpis.totalCustomers` and the Storage card prints `kpis.totalProducts`, both from the `getDashboardKpis()` aggregate the page already awaited. The Transactions card prints **no** number, because nothing in that aggregate describes the customer ledger — it was left blank rather than filled with a plausible-looking figure. Adding a `customerTransaction.count()` to the hot dashboard path is a deliberate future decision, not a filler.
+- **Permission-gated like the sidebar**: each card declares the same `permission` its nav row uses (`customers.view` / `inventory.view` / `customers.credit`) and is filtered through `hasPermission(permissions, key)`. Without this a role like `ACCOUNTANT` (no `customers.credit`) would see a card that 403s on click. `getCurrentUser()` is `cache()`d and the shell layout already resolved it, so the page pays nothing.
+- **i18n**: 4 new keys under `dashboard` (`quickNav`, `quickNavCustomersHint`, `quickNavStorageHint`, `quickNavTransactionsHint`). Titles reuse existing `nav.*` keys so the card and its sidebar row can never disagree. Only `ar.ts` exists in this tree.
+- **Verified live** (`next start -p 3101`, served at basePath `/demo/grocery`, superadmin session from `scripts/mint-session.ts`, Edge headless via `puppeteer-core`): **47/47 PASS** — section renders exactly 3 cards; live counters read 25 customers / 43 products; each card is 317×143 and fully clickable; each click navigates **client-side** (a `window.__navMarker` set on the dashboard survives the transition → no full reload) and lands on real content with no 404; `basePath` applied to every href; dark mode recolours the cards; 390px stacks them full width with no h-scroll, 820px gives a 2-up grid, 1280px a 3-up grid.
+- **Gates**: `tsc --noEmit` clean both trees; `vitest run` 7/7; `npm run build` ✓ in both. `eslint` on the two touched files is clean — the 2 errors `npm run lint` reports are pre-existing in `features/shell/offline-indicator.tsx` (`react-hooks/set-state-in-effect`), untouched here.
+
+### Found while doing this — recorded, not fixed
+- **The two grocery trees have diverged, and `system/grocery` is ahead.** It carries two fixes the demo copy lacks: the `useNavIntent()` prefetch-storm fix and the `/icons/*.png` basePath 404 fix. Observable in the demo copy: the browser requests a root-absolute `http://localhost:3101/icons/icon-192.png` (escapes `/demo/grocery`) and gets a 404, and one dashboard load fires ~100+ aborted `_rsc=` prefetches. **The demo copy still needs them ported.**
+- **The "view more" arrow on the expiring-batches panel is mojibake** — `U+00E2 U+2020 U+2019` where `U+2192` (→) belongs, in `dashboard/page.tsx`. Pre-existing and byte-identical in both trees; left alone to keep this diff surgical.
+- **The 7 deployed clones under `orginazition/*/systems/grocery/` do not have these cards.** They are gitignored customer runtime data, `cloneSystemForOrg` has no template re-sync path, and `orgSystemNeedsBuild` keys off `.runtime.json` rather than a template source hash — so shipping this to a live org means copying the changed files into each clone and rebuilding it. Not attempted here; that is a deployment decision.
+
 ## [M12 NOTES] (auth hardening + §49 test matrix + final verification — COMPLETE)
 - **mustChangePassword enforcement (was set but never checked)**: `changeOwnPasswordSchema` (min 6 + confirm match) in auth/schema.ts; `changeOwnPassword(userId, pw)` in auth/service.ts enforces SystemSettings.passwordMinLength (WEAK_PASSWORD), bcrypt rounds 12, clears mustChangePassword/failedLoginAttempts/lockedUntil, audits PASSWORD_CHANGE_SELF; `changeOwnPasswordAction` in actions.ts; `ui/change-password-form.tsx` + `(auth)/change-password/page.tsx`; **`(app)/layout.tsx` redirects to /change-password when user.mustChangePassword**. HTTP-verified: flagged cashier → /dashboard 307 /change-password; page 200 authed.
 - **requestMeta() made request-scope-safe**: `headers()` wrapped in try/catch returning {ip:null,userAgent:null} outside requests — smoke scripts can now call authenticate() directly (production unaffected).
@@ -232,7 +246,19 @@ Soft delete: Product, Customer, Supplier, User (deletedAt flag; financial record
 - Returns UI: `/sales/returns/new` wizard (invoice lookup → per-line return qty ≤ max → reason/restock/refund) + `/sales/returns` history list.
 - RSC serialization: Decimal fields must be mapped to strings BEFORE crossing the server-action boundary (posSearchAction does this).
 
+## [APPEARANCE] (M1 — brand palette, no migration)
+- Root cause of the flat look: the light palette was chroma-less — `--primary: oklch(0.205 0 0)` and all five `--chart-*` were `oklch(… 0 0)`, so charts rendered in shades of grey and buttons were black-on-white. Only `--sidebar-primary` (dark) carried any hue.
+- Fix lives entirely in the `src/app/globals.css` token blocks (`:root` + `.dark`). Brand hue = emerald (~163°). No component was touched.
+- Card/canvas separation: `--background` is now a faint tinted grey `oklch(0.978 0.004 163)` while `--card` stays pure white, so cards read as elevated instead of relying on borders alone.
+- Chart ramp = 5 distinct hues (emerald / blue / amber / violet / rose) at similar lightness, so no single series dominates and none is mistaken for the primary.
+- `--radius` 0.625rem → 0.75rem; drives the whole radius scale via `--radius-sm…4xl`.
+- Verified 32/32 via Edge probe (`puppeteer-core`): primary/foreground contrast 5.22:1 light and 9.16:1 dark; body text 17.3:1 both; card-vs-background delta 10 / 11; min pairwise chart ΔE 51.0 light / 47.5 dark; no horizontal overflow.
+- Chart distinguishability MUST be measured with CIE76 ΔE, not WCAG contrast — same-lightness hues of different hue legitimately score ~1.0:1 under luminance contrast. Using WCAG here produces a false failure.
+- `@media print` and the `#pdf-paper` SAMA rules use hardcoded hex, so receipts / invoices / reports are unaffected by any token change.
+
 ## [DECISION LOG]
+- 2026-10-06: Appearance is org-persisted in the grocery DB (`SystemSettings`), not localStorage — every other grocery setting is org-scoped, and clones must not diverge per browser. Overrides are emitted from the `(app)` layout, NOT the root layout, deliberately: the root layout cannot read the DB without `await connection()`, which would de-opt `/login`, `/forgot-password` and `/reset-password` from static to dynamic and break the build's no-DB-during-prerender contract. Consequence accepted: auth pages keep the built-in palette.
+- 2026-10-06: Chart colours will be derived from the chosen primary hue rather than exposed as 5 independent pickers; foreground colour is computed (whichever candidate clears WCAG 4.5:1), never hand-authored.
 - 2026-08-24: M12 closed the project. mustChangePassword now enforced at the (app) layout boundary; auth services made callable outside request scope via safe requestMeta() so the §49 matrix can exercise them directly.
 - 2026-08-23: Chose custom jose-based sessions over next-auth (v4 incompatible-era with Next 16, v5 beta-only). Reversible at M2 start if overridden.
 - 2026-08-23: Money = numeric(14,2) + decimal.js; costs snapshotted onto documents so historical profit never drifts with price edits.

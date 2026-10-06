@@ -11,13 +11,18 @@ export async function proxy(request: NextRequest) {
     if (isLogin || pathname === "/") {
       return NextResponse.next();
     }
-    const loginUrl = new URL("/login", request.url);
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.search = "";
     loginUrl.searchParams.set("next", pathname + search);
     return NextResponse.redirect(loginUrl);
   }
 
   if (isLogin) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    const dashUrl = request.nextUrl.clone();
+    dashUrl.pathname = "/dashboard";
+    dashUrl.search = "";
+    return NextResponse.redirect(dashUrl);
   }
 
   return NextResponse.next();

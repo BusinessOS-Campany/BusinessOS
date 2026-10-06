@@ -3,11 +3,9 @@ import { PrismaClient } from "../src/generated/prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { hash } from "bcryptjs"
 
-// Same schema the runtime uses: the adapter reports `public` unless told the
-// schema, and a seeded org in its own schema would otherwise write to `public`.
 const adapter = new PrismaPg(
   { connectionString: process.env.DATABASE_URL },
-  { schema: process.env.DATABASE_SCHEMA },
+  { schema: "dental" }
 )
 const prisma = new PrismaClient({ adapter })
 
@@ -31,49 +29,52 @@ function randomDaysAgo() {
 }
 
 async function wipeDatabase() {
-  await prisma.$transaction([
-    prisma.installment.deleteMany({}),
-    prisma.paymentPlan.deleteMany({}),
-    prisma.payment.deleteMany({}),
-    prisma.invoiceItem.deleteMany({}),
-    prisma.invoice.deleteMany({}),
-    prisma.labCase.deleteMany({}),
-    prisma.stockMovement.deleteMany({}),
-    prisma.product.deleteMany({}),
-    prisma.supplier.deleteMany({}),
-    prisma.expense.deleteMany({}),
-    prisma.communication.deleteMany({}),
-    prisma.notification.deleteMany({}),
-    prisma.session.deleteMany({}),
-    prisma.auditLog.deleteMany({}),
-    prisma.setting.deleteMany({}),
-    prisma.consentForm.deleteMany({}),
-    prisma.document.deleteMany({}),
-    prisma.imaging.deleteMany({}),
-    prisma.prescriptionItem.deleteMany({}),
-    prisma.prescription.deleteMany({}),
-    prisma.toothCondition.deleteMany({}),
-    prisma.toothRecord.deleteMany({}),
-    prisma.medicalHistory.deleteMany({}),
-    prisma.dentalHistory.deleteMany({}),
-    prisma.patientAlert.deleteMany({}),
-    prisma.clinicalNote.deleteMany({}),
-    prisma.diagnosis.deleteMany({}),
-    prisma.treatmentPlanProcedure.deleteMany({}),
-    prisma.treatmentPlan.deleteMany({}),
-    prisma.waitingEntry.deleteMany({}),
-    prisma.appointment.deleteMany({}),
-    prisma.chair.deleteMany({}),
-    prisma.room.deleteMany({}),
-    prisma.dentist.deleteMany({}),
-    prisma.user.deleteMany({}),
-    prisma.role.deleteMany({}),
-    prisma.patient.deleteMany({}),
-    prisma.branch.deleteMany({}),
-    prisma.clinic.deleteMany({}),
-    prisma.medication.deleteMany({}),
-    prisma.procedure.deleteMany({}),
-  ])
+  const tables: { deleteMany: (args?: object) => Promise<unknown> }[] = [
+    prisma.installment,
+    prisma.paymentPlan,
+    prisma.payment,
+    prisma.invoiceItem,
+    prisma.invoice,
+    prisma.labCase,
+    prisma.stockMovement,
+    prisma.product,
+    prisma.supplier,
+    prisma.expense,
+    prisma.communication,
+    prisma.notification,
+    prisma.session,
+    prisma.auditLog,
+    prisma.setting,
+    prisma.consentForm,
+    prisma.document,
+    prisma.imaging,
+    prisma.prescriptionItem,
+    prisma.prescription,
+    prisma.toothCondition,
+    prisma.toothRecord,
+    prisma.medicalHistory,
+    prisma.dentalHistory,
+    prisma.patientAlert,
+    prisma.clinicalNote,
+    prisma.diagnosis,
+    prisma.treatmentPlanProcedure,
+    prisma.treatmentPlan,
+    prisma.waitingEntry,
+    prisma.appointment,
+    prisma.chair,
+    prisma.room,
+    prisma.dentist,
+    prisma.user,
+    prisma.role,
+    prisma.patient,
+    prisma.branch,
+    prisma.clinic,
+    prisma.medication,
+    prisma.procedure,
+  ]
+  for (const t of tables) {
+    await t.deleteMany({})
+  }
 }
 
 async function main() {
