@@ -7,7 +7,7 @@ import { STORE_ASSET_BUCKET, uploadObject } from "@/shared/supabase-storage";
 import { decodeImageData, extensionForMime, sniffImageMime, type ImageMime } from "@/shared/core/image-data";
 import {
   storeSettingsSchema, salesSettingsSchema, inventorySettingsSchema,
-  localizationSettingsSchema, securitySettingsSchema,
+  localizationSettingsSchema, securitySettingsSchema, appearanceSettingsSchema,
 } from "./schema";
 
 /**
@@ -145,5 +145,31 @@ export async function saveSecuritySettings(userId: string, raw: unknown) {
     },
   });
   await auditSettings(userId, "SystemSettings", { section: "security" });
+  return saved;
+}
+
+/**
+ * Appearance overrides. Empty string from the form means "fall back to the
+ * built-in palette", which is stored as NULL so globals.css stays authoritative
+ * and "reset to default" is a single UPDATE rather than a migration.
+ */
+export async function saveAppearanceSettings(userId: string, raw: unknown) {
+  const data = appearanceSettingsSchema.parse(raw);
+  const str = (v?: string) => (v === undefined || v === "" ? null : v.trim().toLowerCase());
+  const payload = {
+    themePreset: str(data.themePreset),
+    themePrimary: str(data.themePrimary),
+    themePrimaryDark: str(data.themePrimaryDark),
+    themeBackground: str(data.themeBackground),
+    themeBackgroundDark: str(data.themeBackgroundDark),
+    themeFont: str(data.themeFont),
+    themeRadius: typeof data.themeRadius === "number" ? data.themeRadius : null,
+  };
+  const saved = db.systemSettings.upsert({
+    where: { id: "system" },
+    update: payload,
+    create: { id: "system", ...payload },
+  });
+  await auditSettings(userId, "SystemSettings", { section: "appearance" });
   return saved;
 }

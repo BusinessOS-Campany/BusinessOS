@@ -1,6 +1,7 @@
 // Relative, not `@/`: the shared root vitest.config.ts aliases "@" to the
 // PLATFORM src, so "@/..." would resolve into the wrong tree from here.
 import { describe, expect, it } from "vitest";
+import { appearanceSettingsSchema } from "../src/features/settings/schema";
 import {
   APPEARANCE_FONTS,
   APPEARANCE_PRESETS,
@@ -248,6 +249,32 @@ it("binds --font-sans to the chosen family variable", () => {
   it("emits nothing for the default font", () => {
     const css = appearanceStyleSheet(resolveAppearanceTokens({ themeFont: "cairo" }));
     expect(css).not.toContain("--font-sans");
+  });
+
+  // Regression guard for a real defect: themeRadius was created as INTEGER, so
+  // Postgres truncated every preset's fractional rem (0.5 -> 0) and the app
+  // rendered square corners. The schema must stay a Float, and these bounds
+  // must stay aligned with the clamp in resolveAppearanceTokens.
+  it("accepts fractional rem radii and clamps out-of-range values", () => {
+    const parse = appearanceSettingsSchema.parse.bind(appearanceSettingsSchema);
+    expect(parse({ themeRadius: "0.5" }).themeRadius).toBe(0.5);
+    expect(parse({ themeRadius: "0.375" }).themeRadius).toBe(0.375);
+    expect(parse({ themeRadius: "" }).themeRadius).toBe("");
+    for (const preset of APPEARANCE_PRESETS) {
+      const parsed = parse({ themePreset: preset.id, themeRadius: String(preset.radius) });
+      expect(parsed.themeRadius, `${preset.id} radius must survive the schema`)
+        .toBe(preset.radius);
+    }
+    // Resolver clamps rather than throws, so the schema must not accept more.
+    expect(() => parse({ themeRadius: 9 })).toThrow();
+    expect(resolveAppearanceTokens({ themeRadius: 9 }).light["--radius"]).toBe("2rem");
+  });
+
+  it("rejects malformed appearance input", () => {
+    expect(() => appearanceSettingsSchema.parse({ themePrimary: "#00ff" })).toThrow();
+    expect(() => appearanceSettingsSchema.parse({ themePrimary: "red" })).toThrow();
+    expect(() => appearanceSettingsSchema.parse({ themePreset: "chartreuse" })).toThrow();
+    expect(() => appearanceSettingsSchema.parse({ themeFont: "comic-sans" })).toThrow();
   });
 
   it("never emits an unbalanced brace block", () => {

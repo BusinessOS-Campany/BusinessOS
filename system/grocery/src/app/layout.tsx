@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono } from "next/font/google";
-import { Cairo } from "next/font/google";
+import { Cairo, Tajawal, IBM_Plex_Sans_Arabic, Almarai } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ZodLocale } from "@/components/zod-locale";
@@ -18,6 +18,37 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+// Appearance-picker alternatives. Only one of these is ever active, so they are
+// registered with preload:false — otherwise every visit pays a font download
+// for a face the store probably never selects. appearanceStyleSheet() rebinds
+// --font-sans to the chosen --font-* variable.
+const tajawal = Tajawal({
+  variable: "--font-tajawal",
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "700"],
+  preload: false,
+});
+
+const plexArabic = IBM_Plex_Sans_Arabic({
+  variable: "--font-plex-arabic",
+  subsets: ["arabic", "latin"],
+  // This Next version's font manifest does not treat this family as variable,
+  // so weight is required rather than inferred.
+  weight: ["400", "500", "600", "700"],
+  preload: false,
+});
+
+const almarai = Almarai({
+  variable: "--font-almarai",
+  subsets: ["arabic", "latin"],
+  weight: ["400", "700"],
+  preload: false,
+});
+
+const optionalFontVariables = [tajawal, plexArabic, almarai]
+  .map((f) => f.variable)
+  .join(" ");
 
 /**
  * Where this system is mounted, matching `basePath` in `next.config.ts`.
@@ -62,7 +93,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <body
-        className={`${cairo.variable} ${geistMono.variable} h-full font-sans antialiased`}
+        className={`${cairo.variable} ${geistMono.variable} ${optionalFontVariables} h-full font-sans antialiased`}
       >
         <ThemeProvider>
           <PwaRegister />

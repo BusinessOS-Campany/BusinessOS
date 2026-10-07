@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { getCurrentUser } from "@/features/auth/session";
 import { getT } from "@/shared/i18n";
-import { getStoreSettings } from "@/features/settings/service";
+import { getStoreSettings, getSystemSettings } from "@/features/settings/service";
+import { appearanceStyleSheet, resolveAppearanceTokens } from "@/features/settings/appearance";
 import { Sidebar } from "@/features/shell/sidebar";
 import { Topbar } from "@/features/shell/topbar";
 import { notificationsForBell } from "@/features/notifications/service";
@@ -21,10 +22,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // notificationsForBell returns the unread rows in one query and keeps the
   // ~7-query condition scan off the navigation critical path.
   const { t } = await getT();
-  const [store, notificationRows] = await Promise.all([
+  const [store, notificationRows, system] = await Promise.all([
     getStoreSettings(),
     notificationsForBell(),
+    getSystemSettings(),
   ]);
+  // Org appearance overrides land after globals.css, so they win on specificity
+  // ties. Empty string => globals.css defaults stay authoritative.
+  const appearanceCss = appearanceStyleSheet(resolveAppearanceTokens(system));
   const notifications = notificationRows.map((n) => ({
     id: n.id, type: n.type, body: n.body ?? "", href: n.href,
     isRead: n.isRead, createdAt: n.createdAt.toISOString(),
@@ -32,25 +37,30 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const aiVoice = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar
-        t={t}
-        permissions={user.permissions}
-        storeName={store?.nameAr ?? store?.name ?? t.auth.storeName}
-      />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar
+    <>
+      {appearanceCss ? (
+        <style dangerouslySetInnerHTML={{ __html: appearanceCss }} />
+      ) : null}
+      <div className="flex min-h-screen">
+        <Sidebar
           t={t}
-          userName={user.fullNameAr ?? user.fullName}
-          roleName={user.roleName}
           permissions={user.permissions}
-          notifications={notifications}
           storeName={store?.nameAr ?? store?.name ?? t.auth.storeName}
-          aiVoice={aiVoice}
         />
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar
+            t={t}
+            userName={user.fullNameAr ?? user.fullName}
+            roleName={user.roleName}
+            permissions={user.permissions}
+            notifications={notifications}
+            storeName={store?.nameAr ?? store?.name ?? t.auth.storeName}
+            aiVoice={aiVoice}
+          />
+          <main className="flex-1 p-4 md:p-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

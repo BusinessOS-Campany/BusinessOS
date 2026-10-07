@@ -929,7 +929,9 @@ model SystemSettings {
   themeBackground      String?
   themeBackgroundDark  String?
   themeFont            String?
-  themeRadius          Int?
+  // rem as a fraction (0.375, 0.5, 1.25). Must be Float, not Int: Postgres
+  // would silently truncate every preset's radius to a whole rem.
+  themeRadius          Float?
   updatedAt             DateTime @updatedAt
 
   @@map("system_settings")

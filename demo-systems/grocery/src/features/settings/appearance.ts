@@ -110,7 +110,7 @@ const oklch = (l: number, c: number, h: number) =>
  * same-lightness hues of different hue legitimately score ~1.0:1 on luminance.
  */
 export function buildChartRamp(primary: string, mode: "light" | "dark"): string[] {
-  const { l, c, h } = hexToOklch(primary);
+  const { c, h } = hexToOklch(primary);
   const baseL = mode === "dark" ? 0.74 : 0.62;
   const chroma = Math.min(Math.max(c, 0.1), 0.17);
   // Small lightness stagger on top of the hue rotation, for colour-vision safety.
@@ -125,6 +125,8 @@ export function buildChartRamp(primary: string, mode: "light" | "dark"): string[
 
 export interface AppearancePreset {
   id: string;
+  /** Latin display name — the app UI is Arabic, but these are brand names. */
+  label: string;
   primary: string;
   primaryDark: string;
   /** rem — feeds `--radius`, which drives `--radius-sm…4xl`. */
@@ -136,16 +138,18 @@ export interface AppearancePreset {
  * hatch; these are the paths most orgs will actually use.
  */
 export const APPEARANCE_PRESETS: readonly AppearancePreset[] = [
-  { id: "emerald", primary: "#047857", primaryDark: "#34d399", radius: 0.75 },
-  { id: "ocean",   primary: "#1d4ed8", primaryDark: "#60a5fa", radius: 0.5 },
-  { id: "royal",   primary: "#6d28d9", primaryDark: "#a78bfa", radius: 1 },
-  { id: "rose",    primary: "#be123c", primaryDark: "#fb7185", radius: 1.25 },
-  { id: "amber",   primary: "#b45309", primaryDark: "#fbbf24", radius: 0.375 },
-  { id: "slate",   primary: "#334155", primaryDark: "#94a3b8", radius: 0.625 },
+  { id: "emerald", label: "Emerald", primary: "#047857", primaryDark: "#34d399", radius: 0.75 },
+  { id: "ocean",   label: "Ocean",   primary: "#1d4ed8", primaryDark: "#60a5fa", radius: 0.5 },
+  { id: "royal",   label: "Royal",   primary: "#6d28d9", primaryDark: "#a78bfa", radius: 1 },
+  { id: "rose",    label: "Rose",    primary: "#be123c", primaryDark: "#fb7185", radius: 1.25 },
+  { id: "amber",   label: "Amber",   primary: "#b45309", primaryDark: "#fbbf24", radius: 0.375 },
+  { id: "slate",   label: "Slate",   primary: "#334155", primaryDark: "#94a3b8", radius: 0.625 },
 ];
 
 export interface AppearanceFont {
   id: string;
+  /** Human-facing family name, shown in the picker. */
+  label: string;
   /** The `next/font` CSS variable this family is exposed as. */
   cssVar: string;
 }
@@ -157,10 +161,10 @@ export interface AppearanceFont {
  * referenced, so the browser fetches just that one file.
  */
 export const APPEARANCE_FONTS: readonly AppearanceFont[] = [
-  { id: "cairo", cssVar: "--font-sans" },
-  { id: "tajawal", cssVar: "--font-tajawal" },
-  { id: "plex-arabic", cssVar: "--font-plex-arabic" },
-  { id: "almarai", cssVar: "--font-almarai" },
+  { id: "cairo", label: "Cairo (افتراضي)", cssVar: "--font-sans" },
+  { id: "tajawal", label: "Tajawal", cssVar: "--font-tajawal" },
+  { id: "plex-arabic", label: "IBM Plex Sans Arabic", cssVar: "--font-plex-arabic" },
+  { id: "almarai", label: "Almarai", cssVar: "--font-almarai" },
 ];
 
 /* --------------------------------------------------------------- resolver */

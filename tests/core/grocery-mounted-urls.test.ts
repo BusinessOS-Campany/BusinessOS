@@ -34,6 +34,15 @@ const PLAIN_IMG_SRC = /<img[\s\S]{0,400}?\bsrc=\{?\s*["'`]\\?\/(?!\/)/g;
 const RAW_FORM_ACTION = /<form[\s\S]{0,400}?\saction=\{?\s*["'`]\\?\/(?!\/)/g;
 
 /**
+ * A native GET form whose `action` is a bare identifier (not a mount-aware call
+ * and not a server action): `<form method="GET" action={routePath}>`. The browser
+ * submits to that path verbatim, escaping the mount. Server-action forms are POST
+ * (`action={fn}` with no `method`), so restricting this to GET avoids flagging them.
+ */
+const RAW_GET_FORM_ACTION =
+  /<form[\s\S]{0,400}?method=["']GET["'][\s\S]{0,400}?action=\{\s*([A-Za-z_$][\w$]*)\s*\}/g;
+
+/**
  * A bare root-absolute `/api/` literal, e.g. the body of a URL-builder arrow.
  * Scoped to `/api/` on purpose: an app-route literal is only ever handed to
  * `next/link`, which *does* apply the basePath, so flagging those would be a
@@ -136,6 +145,9 @@ describe("grocery template mount discipline", () => {
 
         for (const m of collect(PLAIN_IMG_SRC, source)) report(m.index, m[0]);
         for (const m of collect(RAW_FORM_ACTION, source)) report(m.index, m[0]);
+        for (const m of collect(RAW_GET_FORM_ACTION, source)) {
+          violations.push(`${at(m.index)}: unmounted GET form action {${m[1]}}`);
+        }
         for (const m of collect(BARE_API_LITERAL, source)) report(m.index, m[0]);
       }
     };

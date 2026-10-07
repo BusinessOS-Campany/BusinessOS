@@ -7,6 +7,7 @@ import { requirePermission } from "@/features/auth/session";
 import {
   saveStoreSettings, saveSalesSettings, saveInventorySettings,
   saveLocalizationSettings, saveSecuritySettings, uploadStoreLogo,
+  saveAppearanceSettings,
 } from "./service";
 
 const uploadLogoSchema = z.object({
@@ -61,5 +62,16 @@ export async function saveSecuritySettingsAction(raw: unknown) {
     const user = await requirePermission("settings.manage");
     const s = await saveSecuritySettings(user.id, raw);
     return ok({ sessionTimeoutMinutes: s.sessionTimeoutMinutes });
+  });
+}
+
+export async function saveAppearanceSettingsAction(raw: unknown) {
+  return guard(async () => {
+    const user = await requirePermission("settings.manage");
+    await saveAppearanceSettings(user.id, raw);
+    // Appearance tokens are read by the (app) layout, so every page must be
+    // re-rendered — not just the settings screen.
+    revalidatePath("/", "layout");
+    return ok({ saved: true });
   });
 }

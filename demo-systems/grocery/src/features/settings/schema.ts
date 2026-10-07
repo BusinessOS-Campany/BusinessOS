@@ -71,7 +71,9 @@ export const appearanceSettingsSchema = z.object({
     .union([z.literal(""), z.string().trim()])
     .refine((v) => v === "" || APPEARANCE_FONTS.some((f) => f.id === v), "unknown font")
     .optional(),
-  themeRadius: z.union([z.literal(""), z.coerce.number().int().min(0).max(30)]).optional(),
+  // Bounds mirror appearance.ts (0..2rem). They must not drift: the resolver
+  // clamps rather than throws, so a wider schema would silently discard input.
+  themeRadius: z.union([z.literal(""), z.coerce.number().min(0).max(2)]).optional(),
 });
 
 export type StoreSettingsInput = z.infer<typeof storeSettingsSchema>;

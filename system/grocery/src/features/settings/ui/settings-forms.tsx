@@ -1,9 +1,13 @@
 ﻿"use client";
 import { VoiceInput, VoiceTextarea } from "@/components/voice-input";
 
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { X } from "lucide-react";
+import {
+  APPEARANCE_FONTS, APPEARANCE_PRESETS, appearanceStyleSheet, resolveAppearanceTokens,
+} from "@/features/settings/appearance";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,7 +24,8 @@ type ActionKey =
   | "saveSalesSettingsAction"
   | "saveInventorySettingsAction"
   | "saveLocalizationSettingsAction"
-  | "saveSecuritySettingsAction";
+  | "saveSecuritySettingsAction"
+  | "saveAppearanceSettingsAction";
 
 function useSettingsForm(
   actionKey: ActionKey,
@@ -268,6 +273,240 @@ export function LocalizationSettingsForm({
             <Input name="timezone" defaultValue={data.timezone} required maxLength={60} dir="ltr" />
           </Field>
           <div className="sm:col-span-2"><Button type="submit" size="sm" disabled={busy}>{busy ? t.common.saving : t.common.save}</Button></div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Live-preview hook.
+ *
+ * Writing the tokens straight onto `document.documentElement` means the store
+ * sees the real result while choosing, and clearing it restores the server
+ * state on unmount. No sync setState inside an effect — the draft is state, and
+ * the effect only mirrors state into the DOM.
+ */
+function useAppearancePreview(css: string) {
+  useEffect(() => {
+    if (!css) return;
+    let el = document.getElementById("appearance-preview") as HTMLStyleElement | null;
+    if (!el) {
+      el = document.createElement("style");
+      el.id = "appearance-preview";
+      document.head.appendChild(el);
+    }
+    el.textContent = css;
+    return () => {
+      el?.remove();
+    };
+  }, [css]);
+}
+
+/** Native colour input + hex text box, kept in sync. */
+function ColorField({
+  name, label, value, onChange,
+}: {
+  name: string;
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const valid = /^#[0-9a-fA-F]{6}$/.test(value);
+  return (
+    <Field label={label}>
+      <div className="flex items-center gap-2" dir="ltr">
+        <input
+          type="color"
+          value={valid ? value : "#000000"}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-9 w-11 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-1"
+          aria-label={label}
+        />
+        <Input
+          name={name}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="#047857"
+          maxLength={7}
+          dir="ltr"
+          className={valid || value === "" ? undefined : "border-destructive"}
+        />
+        {value !== "" && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={label}
+            onClick={() => onChange("")}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+    </Field>
+  );
+}
+
+export function AppearanceSettingsForm({
+  t, data,
+}: {
+  t: Dictionary;
+  data: {
+    themePreset: string | null;
+    themePrimary: string | null;
+    themePrimaryDark: string | null;
+    themeBackground: string | null;
+    themeBackgroundDark: string | null;
+    themeFont: string | null;
+    themeRadius: number | null;
+  };
+}) {
+  const { busy, submit } = useSettingsForm("saveAppearanceSettingsAction", t);
+  const [preset, setPreset] = useState(data.themePreset ?? "");
+  const [primary, setPrimary] = useState(data.themePrimary ?? "");
+  const [primaryDark, setPrimaryDark] = useState(data.themePrimaryDark ?? "");
+  const [bg, setBg] = useState(data.themeBackground ?? "");
+  const [bgDark, setBgDark] = useState(data.themeBackgroundDark ?? "");
+  const [font, setFont] = useState(data.themeFont ?? "");
+  const [radius, setRadius] = useState(data.themeRadius == null ? "" : String(data.themeRadius));
+  const s = t.settingsPage;
+
+  const draft = useMemo(
+    () => ({
+      themePreset: preset || null,
+      themePrimary: primary || null,
+      themePrimaryDark: primaryDark || null,
+      themeBackground: bg || null,
+      themeBackgroundDark: bgDark || null,
+      themeFont: font || null,
+      themeRadius: radius === "" ? null : Number(radius),
+    }),
+    [preset, primary, primaryDark, bg, bgDark, font, radius],
+  );
+
+  // Preview only well-formed values; a half-typed hex must not blank the page.
+  const previewCss = useMemo(() => {
+    const clean = (v: string) => (/^#[0-9a-fA-F]{6}$/.test(v) ? v : null);
+    return appearanceStyleSheet(
+      resolveAppearanceTokens({
+        ...draft,
+        themePrimary: clean(primary),
+        themePrimaryDark: clean(primaryDark),
+        themeBackground: clean(bg),
+        themeBackgroundDark: clean(bgDark),
+        themePreset: preset || null,
+      }),
+    );
+  }, [draft, preset, primary, primaryDark, bg, bgDark]);
+
+  useAppearancePreview(previewCss);
+
+  function applyPreset(id: string) {
+    setPreset(id);
+    if (!id) return;
+    const p = APPEARANCE_PRESETS.find((x) => x.id === id);
+    if (!p) return;
+    // A preset is a starting point, so it fills the pickers too.
+    setPrimary(p.primary);
+    setPrimaryDark(p.primaryDark);
+    setRadius(String(p.radius));
+  }
+
+  function resetAll() {
+    setPreset(""); setPrimary(""); setPrimaryDark("");
+    setBg(""); setBgDark(""); setFont(""); setRadius("");
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{s.appearance}</CardTitle>
+        <p className="text-sm text-muted-foreground">{s.appearanceHint}</p>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={submit} className="grid gap-4">
+          <input type="hidden" name="themePreset" value={preset} />
+          <input type="hidden" name="themeFont" value={font} />
+          <input type="hidden" name="themeRadius" value={radius} />
+
+          <Field label={s.appearancePreset}>
+            <div className="flex flex-wrap gap-2">
+              {APPEARANCE_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => applyPreset(p.id)}
+                  aria-pressed={preset === p.id}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+                    preset === p.id
+                      ? "border-primary ring-2 ring-primary/30"
+                      : "border-border hover:border-primary/50"
+                  }`}
+                >
+                  <span
+                    className="h-5 w-5 rounded-full border border-border/50"
+                    style={{ background: p.primary }}
+                  />
+                  <span dir="ltr">{p.label}</span>
+                </button>
+              ))}
+              <Button
+                type="button"
+                variant={preset === "" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPreset("")}
+              >
+                {s.appearancePresetCustom}
+              </Button>
+            </div>
+          </Field>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ColorField name="themePrimary" label={s.appearancePrimary} value={primary} onChange={setPrimary} />
+            <ColorField name="themePrimaryDark" label={s.appearancePrimaryDark} value={primaryDark} onChange={setPrimaryDark} />
+            <ColorField name="themeBackground" label={s.appearanceBackground} value={bg} onChange={setBg} />
+            <ColorField name="themeBackgroundDark" label={s.appearanceBackgroundDark} value={bgDark} onChange={setBgDark} />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={s.appearanceFont}>
+              <Select
+                value={font || "cairo"}
+                onValueChange={(v) => setFont(v === "cairo" ? "" : v)}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {APPEARANCE_FONTS.map((f) => (
+                    <SelectItem key={f.id} value={f.id} style={{ fontFamily: `var(${f.cssVar})` }}>
+                      {f.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label={`${s.appearanceRadius} — ${radius === "" ? "0.75rem" : `${radius}rem`}`}>
+              <input
+                type="range"
+                min={0}
+                max={1.5}
+                step={0.05}
+                value={radius === "" ? 0.75 : Number(radius)}
+                onChange={(e) => setRadius(e.target.value)}
+                dir="ltr"
+                className="w-full"
+              />
+            </Field>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" size="sm" disabled={busy}>
+              {busy ? t.common.saving : t.common.save}
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={resetAll}>
+              {s.appearanceReset}
+            </Button>
+          </div>
         </form>
       </CardContent>
     </Card>

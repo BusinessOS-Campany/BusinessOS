@@ -247,7 +247,7 @@ Soft delete: Product, Customer, Supplier, User (deletedAt flag; financial record
 - Returns UI: `/sales/returns/new` wizard (invoice lookup → per-line return qty ≤ max → reason/restock/refund) + `/sales/returns` history list.
 - RSC serialization: Decimal fields must be mapped to strings BEFORE crossing the server-action boundary (posSearchAction does this).
 
-## [APPEARANCE] (M1 — brand palette, no migration)
+## [APPEARANCE] (M1 — brand palette; M2–M5 — org appearance control panel)
 - Root cause of the flat look: the light palette was chroma-less — `--primary: oklch(0.205 0 0)` and all five `--chart-*` were `oklch(… 0 0)`, so charts rendered in shades of grey and buttons were black-on-white. Only `--sidebar-primary` (dark) carried any hue.
 - Fix lives entirely in the `src/app/globals.css` token blocks (`:root` + `.dark`). Brand hue = emerald (~163°). No component was touched. `globals.css` is byte-identical between this template and the demo copy, so the palette cannot drift.
 - Card/canvas separation: `--background` is now a faint tinted grey `oklch(0.978 0.004 163)` while `--card` stays pure white, so cards read as elevated instead of relying on borders alone.
@@ -257,9 +257,21 @@ Soft delete: Product, Customer, Supplier, User (deletedAt flag; financial record
 - Chart distinguishability MUST be measured with CIE76 ΔE, not WCAG contrast — same-lightness hues of different hue legitimately score ~1.0:1 under luminance contrast. Using WCAG here produces a false failure.
 - `@media print` and the `#pdf-paper` SAMA rules use hardcoded hex, so receipts / invoices / reports are unaffected by any token change.
 
+### Appearance control panel (M2–M5)
+- 7 nullable columns on `system_settings`: `themePreset`, `themePrimary`, `themePrimaryDark`, `themeBackground`, `themeBackgroundDark`, `themeFont`, `themeRadius`. Migrations `20261006000000_appearance_settings` (additive) and `20261006120000_theme_radius_float`. `NULL` = use the built-in palette, so "reset" is one UPDATE and no migration is ever needed.
+- `themeRadius` MUST stay `Float`/`DOUBLE PRECISION`. It was created `Int` and Postgres silently truncated 0.5 → 0, making every preset render square corners. `--radius` is consumed in rem, and presets use fractions (0.375–1.25).
+- Pure resolver `src/features/settings/appearance.ts` (no DB, no server-only) so the client form can preview without a round-trip: presets, curated fonts, WCAG contrast helpers, hex→OKLCH, chart-ramp derivation, `resolveAppearanceTokens()`, `appearanceStyleSheet()`.
+- Setting the page background is not enough — foreground, card, border, muted and muted-foreground are all derived from it, or a dark canvas under the light palette produces unreadable muted labels. A card is also forced to differ from the canvas (blending white into white is a no-op).
+- The panel lives on the existing `/settings/localization` page (approved default), not a new route.
+- **CSS gotcha:** `next/font` declares `--font-sans` on `<body>`, and an element's own custom property beats an inherited one. The font override is emitted on `:root body`, not `:root`, or the rule is dead CSS.
+- Optional picker fonts use `preload: false` so stores that never pick them do not download them. IBM Plex Sans Arabic needs an explicit `weight` array — this Next version's font manifest does not treat it as variable.
+- Template divergence deliberately preserved: this tree's `(app)/layout.tsx` uses `notificationsForBell()` (the demo uses `syncNotifications()`), and root `layout.tsx` keeps `appHref`/basePath icon handling. Appearance was merged into each, never copied over.
+- Verified: tsc clean, 29/29 vitest, `next build` green. Runtime probe ran against the demo copy (identical code path).
+
 ## [DECISION LOG]
 - 2026-10-06: Appearance is org-persisted in the grocery DB (`SystemSettings`), not localStorage — every other grocery setting is org-scoped, and clones must not diverge per browser. Overrides are emitted from the `(app)` layout, NOT the root layout, deliberately: the root layout cannot read the DB without `await connection()`, which would de-opt `/login`, `/forgot-password` and `/reset-password` from static to dynamic and break the build's no-DB-during-prerender contract. Consequence accepted: auth pages keep the built-in palette.
 - 2026-10-06: Chart colours will be derived from the chosen primary hue rather than exposed as 5 independent pickers; foreground colour is computed (whichever candidate clears WCAG 4.5:1), never hand-authored.
+- 2026-10-06: The picker offers 4 curated `next/font` families and NOT a free font-URL field. `next/font` cannot load a runtime URL, so a custom-URL option would need a CSS `@import` at runtime: FOUC plus a CSP hole.
 - 2026-08-24: M12 closed the project. mustChangePassword now enforced at the (app) layout boundary; auth services made callable outside request scope via safe requestMeta() so the §49 matrix can exercise them directly.
 - 2026-08-23: Chose custom jose-based sessions over next-auth (v4 incompatible-era with Next 16, v5 beta-only). Reversible at M2 start if overridden.
 - 2026-08-23: Money = numeric(14,2) + decimal.js; costs snapshotted onto documents so historical profit never drifts with price edits.

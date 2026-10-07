@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { mountedHref } from "@/lib/app-url";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +49,7 @@ export async function ReportHeader({
           <PdfButton label={t.common.pdf} />
         </div>
       </div>
-      <form method="GET" action={basePath} className="flex flex-wrap items-end gap-2 print:hidden">
+      <form method="GET" action={mountedHref(basePath)} className="flex flex-wrap items-end gap-2 print:hidden">
         <div>
           <label className="mb-1 block text-xs font-medium text-muted-foreground">{t.common.from}</label>
           <Input type="date" name="from" defaultValue={fromISO} className="w-40" />
