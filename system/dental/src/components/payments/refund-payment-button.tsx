@@ -8,13 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Undo2 } from "lucide-react"
 
 export function RefundPaymentButton({ paymentId }: { paymentId: string }) {
-  const { locale } = useI18n()
+  const { t } = useI18n()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   const onRefund = () => {
-    if (!window.confirm(ar ? "استرداد هذه الدفعة؟" : "Refund this payment?")) return
+    if (!window.confirm(t.payments.refundConfirm)) return
     startTransition(async () => {
       await refundPaymentAction(paymentId)
       router.refresh()
@@ -22,7 +21,7 @@ export function RefundPaymentButton({ paymentId }: { paymentId: string }) {
   }
 
   return (
-    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" disabled={isPending} onClick={onRefund} title={ar ? "استرداد" : "Refund"}>
+    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" disabled={isPending} onClick={onRefund} title={t.payments.refundPayment}>
       <Undo2 className="h-3.5 w-3.5" />
     </Button>
   )

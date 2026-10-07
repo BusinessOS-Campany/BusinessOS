@@ -8,6 +8,7 @@ import { PatientFormDialog } from "@/components/patients/patient-form-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
+import { getI18n } from "@/lib/i18n-server"
 
 type Params = { [key: string]: string | string[] | undefined }
 type SearchParams = Promise<Params>
@@ -25,6 +26,7 @@ export default async function PatientsPage({
   searchParams?: SearchParams
 }) {
   const user = await requirePermission("patients:view")
+  const { t } = await getI18n()
   const url: Params = (await searchParams) ?? {}
 
   const q = sp(url, "q")?.trim() ?? ""
@@ -95,9 +97,9 @@ export default async function PatientsPage({
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Patients</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t.nav.patients}</h1>
           <p className="text-sm text-muted-foreground">
-            {total} patients
+            {t.page.totalPatients.replace("{count}", String(total))}
           </p>
         </div>
         {user.permissions.includes("patients:create") && (
@@ -105,7 +107,7 @@ export default async function PatientsPage({
             trigger={
               <Button>
                 <UserPlus className="h-4 w-4" />
-                New Patient
+                {t.patients.newPatient}
               </Button>
             }
           />
@@ -115,7 +117,7 @@ export default async function PatientsPage({
       <Card className="overflow-hidden">
         <form method="GET" action="/patients" className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <Input type="search" name="q" defaultValue={q} placeholder="Search name, ID, phone…" className="w-full" />
+            <Input type="search" name="q" defaultValue={q} placeholder={t.page.searchPatientNo} className="w-full" />
           </div>
           <div className="flex flex-wrap gap-2">
             <select
@@ -123,25 +125,25 @@ export default async function PatientsPage({
               defaultValue={status}
               className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="">All status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              <option value="">{t.ui.allStatuses}</option>
+              <option value="active">{t.patients.active}</option>
+              <option value="inactive">{t.patients.inactive}</option>
             </select>
             <select
               name="gender"
               defaultValue={gender}
               className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="">All genders</option>
-              <option value="MALE">Male</option>
-              <option value="FEMALE">Female</option>
+              <option value="">{t.ui.allGenders}</option>
+              <option value="MALE">{t.patients.male}</option>
+              <option value="FEMALE">{t.patients.female}</option>
             </select>
             <Button type="submit" variant="outline">
-              Filter
+              {t.common.filter}
             </Button>
             {(q || status || genderParam) && (
               <Button type="button" variant="ghost" asChild>
-                <Link href="/patients">Clear</Link>
+                <Link href="/patients">{t.common.clear}</Link>
               </Button>
             )}
           </div>

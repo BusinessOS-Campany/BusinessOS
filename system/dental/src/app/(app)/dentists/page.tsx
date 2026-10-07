@@ -1,9 +1,8 @@
 import { requirePermission } from "@/lib/dal"
 import { prisma } from "@/lib/prisma"
-import { cookies } from "next/headers"
 import Link from "next/link"
 import { Stethoscope } from "lucide-react"
-import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
 import { specialtyLabel, workingDayLabel } from "@/lib/constants/admin"
 import { DentistFormDialog, type DentistLite, type UserOption } from "@/components/dentists/dentist-form-dialog"
 import { Pagination } from "@/components/patients/pagination"
@@ -25,8 +24,7 @@ const PER_PAGE = 15
 
 export default async function DentistsPage({ searchParams }: { searchParams?: SearchParams }) {
   const user = await requirePermission("dentists:view")
-  const cookieStore = await cookies()
-  const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t, locale } = await getI18n()
   const ar = locale === "ar"
   const url: Params = (await searchParams) ?? {}
 
@@ -89,8 +87,8 @@ export default async function DentistsPage({ searchParams }: { searchParams?: Se
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{ar ? "الأطباء" : "Dentists"}</h1>
-          <p className="text-sm text-muted-foreground">{total} {ar ? "طبيب" : "dentists"}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t.dentists.title}</h1>
+          <p className="text-sm text-muted-foreground">{t.page.totalDentists.replace("{count}", String(total))}</p>
         </div>
         {user.permissions.includes("dentists:create") && (
           <DentistFormDialog
@@ -98,7 +96,7 @@ export default async function DentistsPage({ searchParams }: { searchParams?: Se
             trigger={
               <Button>
                 <Stethoscope className="h-4 w-4" />
-                {ar ? "طبيب جديد" : "New Dentist"}
+                {t.dentists.newDentist}
               </Button>
             }
           />
@@ -108,12 +106,12 @@ export default async function DentistsPage({ searchParams }: { searchParams?: Se
       <Card className="overflow-hidden">
         <form method="GET" action="/dentists" className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
           <div className="flex-1">
-            <Input type="search" name="q" defaultValue={q} placeholder={ar ? "بحث بالاسم…" : "Search name…"} className="w-full" />
+            <Input type="search" name="q" defaultValue={q} placeholder={t.page.searchName} className="w-full" />
           </div>
-          <Button type="submit" variant="outline">{ar ? "تصفية" : "Filter"}</Button>
+          <Button type="submit" variant="outline">{t.common.filter}</Button>
           {q && (
             <Button type="button" variant="ghost" asChild>
-              <Link href="/dentists">{ar ? "مسح" : "Clear"}</Link>
+              <Link href="/dentists">{t.common.clear}</Link>
             </Button>
           )}
         </form>
@@ -122,21 +120,21 @@ export default async function DentistsPage({ searchParams }: { searchParams?: Se
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{ar ? "الطبيب" : "Dentist"}</TableHead>
-                <TableHead>{ar ? "التخصص" : "Specialty"}</TableHead>
-                <TableHead>{ar ? "رقم الترخيص" : "License"}</TableHead>
-                <TableHead>{ar ? "أيام العمل" : "Working days"}</TableHead>
-                <TableHead>{ar ? "المواعيد" : "Appointments"}</TableHead>
-                <TableHead>{ar ? "الحالة" : "Status"}</TableHead>
+                <TableHead>{t.appointments.dentist}</TableHead>
+                <TableHead>{t.dentists.specialty}</TableHead>
+                <TableHead>{t.dentists.license}</TableHead>
+                <TableHead>{t.dentists.workingDays}</TableHead>
+                <TableHead>{t.dentists.appointments}</TableHead>
+                <TableHead>{t.dentists.status}</TableHead>
                 {user.permissions.includes("dentists:edit") && (
-                  <TableHead className="text-end">{ar ? "إجراءات" : "Actions"}</TableHead>
+                  <TableHead className="text-end">{t.common.actions}</TableHead>
                 )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-16 text-center text-sm text-muted-foreground">{ar ? "لا يوجد أطباء" : "No dentists found"}</TableCell>
+                  <TableCell colSpan={7} className="py-16 text-center text-sm text-muted-foreground">{t.dentists.noData}</TableCell>
                 </TableRow>
               ) : (
                 rows.map((d) => {
@@ -155,7 +153,7 @@ export default async function DentistsPage({ searchParams }: { searchParams?: Se
                       <TableCell>
                         <div className="font-medium">{label}</div>
                         {!d.user.isActive && (
-                          <div className="text-xs text-destructive">{ar ? "الحساب غير نشط" : "Disabled account"}</div>
+                          <div className="text-xs text-destructive">{t.page.disabledAccount}</div>
                         )}
                       </TableCell>
                       <TableCell className="text-sm">{d.specialty ? specialtyLabel(d.specialty, locale) : "—"}</TableCell>
@@ -173,14 +171,14 @@ export default async function DentistsPage({ searchParams }: { searchParams?: Se
                       </TableCell>
                       <TableCell className="text-sm tabular-nums">{appointmentCounts.get(d.id) ?? d._count.appointments}</TableCell>
                       <TableCell>
-                        <Badge variant={d.isActive ? "success" : "secondary"}>{d.isActive ? (ar ? "نشط" : "Active") : (ar ? "غير نشط" : "Inactive")}</Badge>
+                        <Badge variant={d.isActive ? "success" : "secondary"}>{d.isActive ? t.dentists.active : t.dentists.inactive}</Badge>
                       </TableCell>
                       {user.permissions.includes("dentists:edit") && (
                         <TableCell className="text-end">
                           <DentistFormDialog
                             existing={lite}
                             users={userOptions}
-                            trigger={<Button variant="outline" size="sm">{ar ? "تعديل" : "Edit"}</Button>}
+                            trigger={<Button variant="outline" size="sm">{t.common.edit}</Button>}
                           />
                         </TableCell>
                       )}

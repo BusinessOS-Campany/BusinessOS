@@ -55,12 +55,11 @@ export function LabCaseFormDialog({ trigger, existing = null, patients, dentists
   const [status, setStatus] = useState(existing?.status ?? "CREATED")
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!patientId) {
-      setError(ar ? "حدد المريض أولاً" : "Select a patient first")
+      setError(t.dialogs.labSelectPatient)
       return
     }
     setError(null)
@@ -73,7 +72,7 @@ export function LabCaseFormDialog({ trigger, existing = null, patients, dentists
         router.refresh()
         setOpen(false)
       } else {
-        setError(ar ? "حدث خطأ أثناء الحفظ" : t.common.error)
+        setError(t.common.error)
       }
     })
   }
@@ -85,7 +84,7 @@ export function LabCaseFormDialog({ trigger, existing = null, patients, dentists
         <form onSubmit={onSubmit} className="grid gap-4 py-2">
           <DialogHeader>
             <DialogTitle>{existing ? t.laboratory.editCase : t.laboratory.newCase}</DialogTitle>
-            <DialogDescription>{ar ? "حالة معملية لتركيبات أو أجهزة" : "Lab case for prosthetics or appliances"}</DialogDescription>
+            <DialogDescription>{t.dialogs.labHint}</DialogDescription>
           </DialogHeader>
 
           {existing && <input type="hidden" name="id" value={existing.id} />}
@@ -113,7 +112,7 @@ export function LabCaseFormDialog({ trigger, existing = null, patients, dentists
               <Label>{t.laboratory.dentist}</Label>
               <Select value={dentistId} onValueChange={setDentistId}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={ar ? "بدون طبيب" : "No dentist"} />
+                  <SelectValue placeholder={t.dialogs.selectDentistPh} />
                 </SelectTrigger>
                 <SelectContent>
                   {dentists.map((d) => (
@@ -129,11 +128,11 @@ export function LabCaseFormDialog({ trigger, existing = null, patients, dentists
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>{t.laboratory.teeth}</Label>
-              <Input name="toothNumbers" defaultValue={existing?.toothNumbers.join(", ") ?? ""} placeholder={ar ? "مثال: 16, 17" : "e.g. 16, 17"} />
+              <Input name="toothNumbers" defaultValue={existing?.toothNumbers.join(", ") ?? ""} placeholder={t.dialogs.labTeethPh} />
             </div>
             <div className="space-y-1.5">
               <Label>{t.laboratory.restoration}</Label>
-              <Input name="restorationType" defaultValue={existing?.restorationType ?? ""} placeholder={ar ? "تاج / جسر…" : "Crown / bridge…"} />
+              <Input name="restorationType" defaultValue={existing?.restorationType ?? ""} placeholder={t.dialogs.labRestoPh} />
             </div>
           </div>
 

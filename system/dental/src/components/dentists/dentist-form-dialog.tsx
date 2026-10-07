@@ -55,7 +55,7 @@ export function DentistFormDialog({ trigger, existing = null, users }: Props) {
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!userId) {
-      setError(ar ? "اختر حساب المستخدم" : "Select a user account")
+      setError(t.dialogs.dentistSelectUser)
       return
     }
     setError(null)
@@ -70,8 +70,8 @@ export function DentistFormDialog({ trigger, existing = null, users }: Props) {
       } else {
         const msg =
           res.error === "taken"
-            ? ar ? "هذا الحساب مسجل كطبيب بالفعل" : "This account is already a dentist"
-            : (ar ? "حدث خطأ أثناء الحفظ" : t.common.error)
+            ? t.dialogs.dentistAlready
+            : t.common.error
         setError(msg)
       }
     })
@@ -85,7 +85,7 @@ export function DentistFormDialog({ trigger, existing = null, users }: Props) {
           <DialogHeader>
             <DialogTitle>{existing ? t.dentists.editDentist : t.dentists.newDentist}</DialogTitle>
             <DialogDescription>
-              {ar ? "معلومات الطبيب وأيام العمل" : "Dentist details and working days"}
+              {t.dialogs.dentistHint}
             </DialogDescription>
           </DialogHeader>
 

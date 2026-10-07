@@ -35,6 +35,7 @@ export interface StaffLite {
 export interface RoleOption {
   id: string
   key: string
+  name: string
   nameAr: string | null
 }
 
@@ -64,7 +65,7 @@ export function StaffFormDialog({ trigger, existing = null, roles, branches }: P
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!roleId) {
-      setError(ar ? "اختر الدور" : "Select a role")
+      setError(t.dialogs.staffSelectRole)
       return
     }
     setError(null)
@@ -80,12 +81,12 @@ if (res.ok) {
       } else {
         const msg =
           res.error === "duplicate_email"
-            ? ar ? "البريد الإلكتروني مستخدم مسبقًا" : "Email already in use"
+            ? t.dialogs.staffEmailInUse
             : res.error === "duplicate_username"
-              ? ar ? "اسم المستخدم مستخدم مسبقًا" : "Username already in use"
+              ? t.dialogs.staffUsernameInUse
               : res.error === "self"
-                ? (ar ? "لا يمكنك تعديل حسابك هنا" : "You cannot edit your own account here")
-                : (ar ? "حدث خطأ أثناء الحفظ" : t.common.error)
+                ? t.staff.cannotEditSelf
+                : t.common.error
         setError(msg)
       }
     })
@@ -99,7 +100,7 @@ if (res.ok) {
           <DialogHeader>
             <DialogTitle>{existing ? t.staff.editStaff : t.staff.newStaff}</DialogTitle>
             <DialogDescription>
-              {ar ? "حساب موظف بصلاحيات قابلة للتحديد" : "Staff account with configurable permissions"}
+              {t.dialogs.staffHint}
             </DialogDescription>
           </DialogHeader>
 
@@ -119,7 +120,7 @@ if (res.ok) {
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>{t.staff.username}</Label>
-              <Input name="username" dir="ltr" defaultValue={existing?.username ?? ""} maxLength={40} autoComplete="off" placeholder={ar ? "اسم المستخدم" : "username"} />
+              <Input name="username" dir="ltr" defaultValue={existing?.username ?? ""} maxLength={40} autoComplete="off" placeholder={t.staff.username} />
             </div>
             <div className="space-y-1.5">
               <Label>{t.staff.phone}</Label>
@@ -139,7 +140,7 @@ if (res.ok) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">{ar ? "بدون فرع" : "No branch"}</SelectItem>
+                  <SelectItem value="__none__">{t.page.noBranch}</SelectItem>
                   {branches.map((b) => (
                     <SelectItem key={b.id} value={b.id}>
                       {ar ? (b.nameAr ?? b.name) : b.name}
@@ -161,7 +162,7 @@ if (res.ok) {
                 <SelectContent>
                   {roles.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
-                      {ar ? (r.nameAr ?? r.key) : r.key}
+                      {ar ? (r.nameAr ?? r.name) : r.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

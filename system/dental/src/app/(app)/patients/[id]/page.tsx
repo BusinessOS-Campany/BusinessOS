@@ -16,6 +16,7 @@ import { calcAge, formatCurrency, formatDate } from "@/lib/format"
 import { GOVERNORATES } from "@/lib/constants/yemen"
 import { statusColor } from "@/lib/status-ui"
 import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
 
 interface Props {
   params: Promise<{ id: string }>
@@ -41,6 +42,7 @@ export default async function PatientDetailPage({ params }: Props) {
   const { id } = await params
   const cookieStore = await cookies()
   const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t } = await getI18n()
 
   const patient = await prisma.patient.findUnique({
     where: { id },
@@ -100,15 +102,15 @@ export default async function PatientDetailPage({ params }: Props) {
   }
 
   const info: [string, string][] = [
-    ["Patient No.", patient.patientNo],
-    ["Gender", patient.gender === "MALE" ? "Male" : "Female"],
-    ...(age !== null ? ([["Age", String(age)]] as [string, string][]) : []),
-    ...(patient.nationalId ? ([["National ID", patient.nationalId]] as [string, string][]) : []),
-    ["Nationality", patient.nationality],
-    ["Governorate", patient.governorate ? govAr(patient.governorate) : "—"],
-    ["City", patient.city ?? "—"],
-    ...(patient.occupation ? ([["Occupation", patient.occupation]] as [string, string][]) : []),
-    ["Email", patient.email ?? "—"],
+    [t.patients.patientNo, patient.patientNo],
+    [t.patients.gender, patient.gender === "MALE" ? t.patients.male : t.patients.female],
+    ...(age !== null ? ([[t.patients.age, String(age)]] as [string, string][]) : []),
+    ...(patient.nationalId ? ([[t.patients.nationalId, patient.nationalId]] as [string, string][]) : []),
+    [t.patients.nationality, patient.nationality],
+    [t.patients.governorate, patient.governorate ? govAr(patient.governorate) : "—"],
+    [t.patients.city, patient.city ?? "—"],
+    ...(patient.occupation ? ([[t.page.occupation, patient.occupation]] as [string, string][]) : []),
+    [t.common.email, patient.email ?? "—"],
   ]
 
   return (
@@ -126,13 +128,13 @@ export default async function PatientDetailPage({ params }: Props) {
                 {patient.firstName} {patient.middleName ? `${patient.middleName} ` : ""}{patient.lastName}
               </h1>
               {patient.isActive ? (
-                <Badge className="bg-emerald-600/10 text-emerald-700">Active</Badge>
+                <Badge className="bg-emerald-600/10 text-emerald-700">{t.patients.active}</Badge>
               ) : (
-                <Badge variant="secondary">Inactive</Badge>
+                <Badge variant="secondary">{t.patients.inactive}</Badge>
               )}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              {patient.patientNo} • {patient.phone ? <span dir="ltr">{patient.phone}</span> : "No phone"}
+              {patient.patientNo} • {patient.phone ? <span dir="ltr">{patient.phone}</span> : t.page.noPhone}
             </p>
           </div>
         </div>
@@ -145,7 +147,7 @@ export default async function PatientDetailPage({ params }: Props) {
             trigger={
               <Button variant="outline">
                 <Pencil className="h-4 w-4" />
-                Edit
+                {t.common.edit}
               </Button>
             }
           />
@@ -155,25 +157,25 @@ export default async function PatientDetailPage({ params }: Props) {
       <div className="mb-6 grid gap-4 sm:grid-cols-4">
         <Card>
           <CardHeader className="pb-1">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Appointments</CardTitle>
+            <CardTitle className="text-xs font-medium text-muted-foreground">{t.nav.appointments}</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">{patient.appointments.length}+</CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-1">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Total Paid</CardTitle>
+            <CardTitle className="text-xs font-medium text-muted-foreground">{t.billing.totalPaid}</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">{formatCurrency(totalPaid)}</CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-1">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Outstanding</CardTitle>
+            <CardTitle className="text-xs font-medium text-muted-foreground">{t.page.outstanding}</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold text-amber-600">{formatCurrency(balance)}</CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-1">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Tooth Records</CardTitle>
+            <CardTitle className="text-xs font-medium text-muted-foreground">{t.page.toothRecords}</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-bold">{patient.toothRecords.length}</CardContent>
         </Card>
@@ -181,17 +183,17 @@ export default async function PatientDetailPage({ params }: Props) {
 
       <Tabs defaultValue="overview">
         <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="appointments">Appointments</TabsTrigger>
-          <TabsTrigger value="billing">Billing</TabsTrigger>
-          <TabsTrigger value="clinical">Clinical</TabsTrigger>
+          <TabsTrigger value="overview">{t.nav.overview}</TabsTrigger>
+          <TabsTrigger value="appointments">{t.nav.appointments}</TabsTrigger>
+          <TabsTrigger value="billing">{t.nav.billingGroup}</TabsTrigger>
+          <TabsTrigger value="clinical">{t.nav.clinic}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
           <div className="grid gap-4 sm:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">Personal Information</CardTitle>
+                <CardTitle className="text-sm">{t.page.personalInfo}</CardTitle>
               </CardHeader>
               <CardContent>
                 <dl className="grid grid-cols-[minmax(120px,auto)_1fr] gap-x-4 gap-y-2 text-sm">
@@ -208,24 +210,24 @@ export default async function PatientDetailPage({ params }: Props) {
             <div className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm">Contact & Emergency</CardTitle>
+                  <CardTitle className="text-sm">{t.page.contactEmergency}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <dl className="grid grid-cols-[minmax(120px,auto)_1fr] gap-x-4 gap-y-2 text-sm">
                     <div className="contents">
-                      <dt className="text-muted-foreground">Phone</dt>
+                      <dt className="text-muted-foreground">{t.patients.phone}</dt>
                       <dd className="font-medium" dir="ltr">{patient.phone ?? "—"}</dd>
                     </div>
                     <div className="contents">
-                      <dt className="text-muted-foreground">WhatsApp</dt>
+                      <dt className="text-muted-foreground">{t.patients.whatsapp}</dt>
                       <dd className="font-medium" dir="ltr">{patient.whatsapp ?? "—"}</dd>
                     </div>
                     <div className="contents">
-                      <dt className="text-muted-foreground">Emergency contact</dt>
+                      <dt className="text-muted-foreground">{t.patients.emergencyContact}</dt>
                       <dd className="font-medium">{patient.emergencyContactName ?? "—"}</dd>
                     </div>
                     <div className="contents">
-                      <dt className="text-muted-foreground">Emergency phone</dt>
+                      <dt className="text-muted-foreground">{t.page.emergencyPhone}</dt>
                       <dd className="font-medium" dir="ltr">{patient.emergencyContactPhone ?? "—"}</dd>
                     </div>
                   </dl>
@@ -234,21 +236,21 @@ export default async function PatientDetailPage({ params }: Props) {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm">Medical History</CardTitle>
+                  <CardTitle className="text-sm">{t.patients.medicalHistory}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   {patient.medicalHistory ? (
                     <>
                       <div className="flex flex-wrap gap-2">
-                        {patient.medicalHistory.diabetes && <Badge>Diabetes</Badge>}
-                        {patient.medicalHistory.hypertension && <Badge>Hypertension</Badge>}
-                        {patient.medicalHistory.heartDisease && <Badge>Heart disease</Badge>}
-                        {patient.medicalHistory.bleedingDisorder && <Badge>Bleeding disorder</Badge>}
-                        {patient.medicalHistory.pregnancy && <Badge>Pregnancy</Badge>}
+                        {patient.medicalHistory.diabetes && <Badge>{t.page.diabetes}</Badge>}
+                        {patient.medicalHistory.hypertension && <Badge>{t.page.hypertension}</Badge>}
+                        {patient.medicalHistory.heartDisease && <Badge>{t.page.heartDisease}</Badge>}
+                        {patient.medicalHistory.bleedingDisorder && <Badge>{t.page.bleedingDisorder}</Badge>}
+                        {patient.medicalHistory.pregnancy && <Badge>{t.page.pregnancy}</Badge>}
                       </div>
                       {patient.medicalHistory.allergies.length > 0 && (
                         <p>
-                          <span className="text-muted-foreground">Allergies: </span>
+                          <span className="text-muted-foreground">{t.patients.allergies}: </span>
                           <span className="text-destructive">{patient.medicalHistory.allergies.join(", ")}</span>
                         </p>
                       )}
@@ -257,7 +259,7 @@ export default async function PatientDetailPage({ params }: Props) {
                       )}
                     </>
                   ) : (
-                    <p className="text-muted-foreground">No medical history recorded.</p>
+                    <p className="text-muted-foreground">{t.page.medicalHistoryNone}</p>
                   )}
                 </CardContent>
               </Card>
@@ -269,7 +271,7 @@ export default async function PatientDetailPage({ params }: Props) {
           <Card>
             <CardContent className="pt-0">
               {patient.appointments.length === 0 ? (
-                <p className="py-12 text-center text-sm text-muted-foreground">No appointments yet.</p>
+                <p className="py-12 text-center text-sm text-muted-foreground">{t.page.noAppointments}</p>
               ) : (
                 <div className="divide-y">
                   {patient.appointments.map((a) => (
@@ -277,7 +279,7 @@ export default async function PatientDetailPage({ params }: Props) {
                       <div>
                         <p className="text-sm font-medium">{formatDate(a.date)}</p>
                         <p className="text-xs text-muted-foreground">
-                          {a.startTime} – {a.endTime} • {a.dentist?.user.name ?? "Unassigned"}
+                          {a.startTime} – {a.endTime} •                           {a.dentist?.user.name ?? t.dashboard.unassigned}
                         </p>
                       </div>
                       <Badge style={{ borderColor: statusColor(a.status).border, color: statusColor(a.status).text }}>
@@ -295,7 +297,7 @@ export default async function PatientDetailPage({ params }: Props) {
           <Card>
             <CardContent className="pt-0">
               {patient.invoices.length === 0 ? (
-                <p className="py-12 text-center text-sm text-muted-foreground">No invoices yet.</p>
+                <p className="py-12 text-center text-sm text-muted-foreground">{t.page.noInvoices}</p>
               ) : (
                 <div className="divide-y">
                   {patient.invoices.map((inv) => (
@@ -321,29 +323,29 @@ export default async function PatientDetailPage({ params }: Props) {
         <TabsContent value="clinical">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Dental Records</CardTitle>
+              <CardTitle className="text-sm">{t.nav.imaging}</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
               {patient.dentalHistory ? (
                 <div className="space-y-2 text-sm">
                   {patient.dentalHistory.previousTreatment && (
-                    <p><span className="text-muted-foreground">Previous treatment: </span>{patient.dentalHistory.previousTreatment}</p>
+                    <p><span className="text-muted-foreground">{t.page.previousTreatment}</span>{patient.dentalHistory.previousTreatment}</p>
                   )}
                   {patient.dentalHistory.previousExtractions && (
-                    <p><span className="text-muted-foreground">Extractions: </span>{patient.dentalHistory.previousExtractions}</p>
+                    <p><span className="text-muted-foreground">{t.page.extractions}</span>{patient.dentalHistory.previousExtractions}</p>
                   )}
                   {patient.dentalHistory.oralHygiene && (
-                    <p><span className="text-muted-foreground">Oral hygiene: </span>{patient.dentalHistory.oralHygiene}</p>
+                    <p><span className="text-muted-foreground">{t.page.oralHygiene}</span>{patient.dentalHistory.oralHygiene}</p>
                   )}
                 </div>
               ) : (
-                <p className="text-muted-foreground">No dental history recorded.</p>
+                <p className="text-muted-foreground">{t.page.dentalHistoryNone}</p>
               )}
 
               <Separator className="my-4" />
 
               <p className="mb-3 text-xs font-medium text-muted-foreground">
-                {locale === "ar" ? "مخطط الأسنان" : "Dental Chart"}
+                {t.nav.dentalChart}
               </p>
               <DentalChartView
                 patientId={patient.id}

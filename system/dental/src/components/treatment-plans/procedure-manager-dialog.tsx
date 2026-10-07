@@ -54,14 +54,13 @@ const emptyForm = {
 type FormState = typeof emptyForm
 
 export function ProcedureManagerDialog({ records }: Props) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm)
   const [editing, setEditing] = useState(false)
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   const startNew = () => {
     setForm(emptyForm)
@@ -98,9 +97,9 @@ export function ProcedureManagerDialog({ records }: Props) {
         setForm(emptyForm)
         setEditing(false)
       } else if (res.error === "duplicate") {
-        setError(ar ? "رمز الإجراء مكرر" : "Procedure code already exists")
+        setError(t.dialogs.procCodeExists)
       } else {
-        setError(ar ? "حدث خطأ أثناء الحفظ" : t.common.error)
+        setError(t.common.error)
       }
     })
   }
@@ -116,7 +115,7 @@ export function ProcedureManagerDialog({ records }: Props) {
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t.treatmentPlans.manageProcedures}</DialogTitle>
-          <DialogDescription>{ar ? "دليل الإجراءات والأسعار المستخدمة في خطط العلاج والفواتير" : "Procedure catalog used for treatment plans and invoices"}</DialogDescription>
+          <DialogDescription>{t.dialogs.procCatalogHint}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="grid gap-3 rounded-lg border p-4">
@@ -128,15 +127,15 @@ export function ProcedureManagerDialog({ records }: Props) {
             </div>
             <div className="space-y-1">
               <Label>{t.treatmentPlans.procedureCategory}</Label>
-              <Input name="category" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} placeholder="Restorative" />
+              <Input name="category" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} placeholder={t.dialogs.procCategoryPh} />
             </div>
             <div className="space-y-1">
               <Label>{t.treatmentPlans.procedureNameEn} *</Label>
-              <Input name="nameEn" value={form.nameEn} onChange={(e) => setForm((f) => ({ ...f, nameEn: e.target.value }))} placeholder="Zirconia crown" />
+              <Input name="nameEn" value={form.nameEn} onChange={(e) => setForm((f) => ({ ...f, nameEn: e.target.value }))} placeholder={t.dialogs.procNamePh} />
             </div>
             <div className="space-y-1">
               <Label>{t.treatmentPlans.procedureNameAr} *</Label>
-              <Input name="nameAr" value={form.nameAr} onChange={(e) => setForm((f) => ({ ...f, nameAr: e.target.value }))} placeholder="تاج زيركون" />
+              <Input name="nameAr" value={form.nameAr} onChange={(e) => setForm((f) => ({ ...f, nameAr: e.target.value }))} placeholder={t.dialogs.procNamePh} />
             </div>
             <div className="space-y-1">
               <Label>{t.treatmentPlans.durationMinutes}</Label>

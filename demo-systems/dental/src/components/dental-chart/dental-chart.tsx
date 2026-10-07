@@ -4,6 +4,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import { TEETH_BY_DENTITION, type ToothMeta } from "@/lib/dental-tooth"
 import { CONDITION_VISUALS } from "@/lib/constants/clinical"
 import { cn } from "@/lib/utils"
+import { TOOTH_W_BASE, computeToothWidth } from "@/lib/dental-chart-layout"
 import { ToothSvg } from "./tooth-svg"
 import type { ToothRecordDTO } from "./condition-editor-dialog"
 
@@ -25,10 +26,7 @@ const LOWER_QUADS: Record<"ADULT" | "PRIMARY", number[]> = {
   PRIMARY: [8, 7],
 }
 
-const TOOTH_W_BASE = 42
-const TOOTH_W_MIN = 26
 const ARC_AMP = 8
-const H_GAP = 24 // gap between the two quad groups in one row
 
 export function DentalChart({ dentition, records, onSelect, locale }: Props) {
   const teeth = TEETH_BY_DENTITION[dentition]
@@ -45,9 +43,7 @@ export function DentalChart({ dentition, records, onSelect, locale }: Props) {
     return () => ro.disconnect()
   }, [])
 
-  const toothW = gridW > 0
-    ? Math.min(TOOTH_W_BASE, Math.max(TOOTH_W_MIN, Math.floor((gridW - H_GAP) / 8)))
-    : TOOTH_W_BASE
+  const toothW = computeToothWidth(gridW)
   const arcAmp = gridW > 0 ? ARC_AMP * (toothW / TOOTH_W_BASE) : ARC_AMP
 
   const byTooth = useMemo(() => {
@@ -113,12 +109,10 @@ export function DentalChart({ dentition, records, onSelect, locale }: Props) {
         <p className="text-[10px] font-medium text-muted-foreground sm:text-xs">
           {locale === "ar" ? "الفك العلوي" : "Upper arch"}
         </p>
-        <div className="flex justify-center" ref={gridRef}>
-          <div className="flex items-end">
+        <div ref={gridRef} className="w-full overflow-x-auto">
+          <div className="mx-auto flex w-max items-end">
             {renderQuad(UPPER_QUADS[dentition][0], "upper")}
-          </div>
-          <div className="w-[24px]" />
-          <div className="flex items-end">
+            <div className="w-[24px]" />
             {renderQuad(UPPER_QUADS[dentition][1], "upper")}
           </div>
         </div>
@@ -128,12 +122,10 @@ export function DentalChart({ dentition, records, onSelect, locale }: Props) {
         <p className="text-[10px] font-medium text-muted-foreground sm:text-xs">
           {locale === "ar" ? "الفك السفلي" : "Lower arch"}
         </p>
-        <div className="flex justify-center">
-          <div className="flex items-start">
+        <div className="w-full overflow-x-auto">
+          <div className="mx-auto flex w-max items-start">
             {renderQuad(LOWER_QUADS[dentition][0], "lower")}
-          </div>
-          <div className="w-[24px]" />
-          <div className="flex items-start">
+            <div className="w-[24px]" />
             {renderQuad(LOWER_QUADS[dentition][1], "lower")}
           </div>
         </div>

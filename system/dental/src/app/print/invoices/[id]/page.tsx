@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator"
 import { PrintButton } from "@/components/prescriptions/print-button"
 import { calcAge, formatCurrency, formatDate } from "@/lib/format"
 import { invoiceStatusLabel, paymentMethodLabel } from "@/lib/constants/billing"
+import { getI18n } from "@/lib/i18n-server"
 
 interface Props {
   params: Promise<{ id: string }>
@@ -20,7 +21,7 @@ export default async function InvoicePrintPage({ params }: Props) {
   const { id } = await params
   const cookieStore = await cookies()
   const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
-  const ar = locale === "ar"
+  const { t } = await getI18n()
 
   const invoice = await prisma.invoice.findUnique({
     where: { id },
@@ -47,10 +48,10 @@ export default async function InvoicePrintPage({ params }: Props) {
   const clinic = user.clinicId
     ? await prisma.clinic.findUnique({ where: { id: user.clinicId }, select: { name: true, nameAr: true, address: true, city: true, phone: true } })
     : null
-  const clinicName = ar ? (clinic?.nameAr ?? clinic?.name ?? "") : (clinic?.name ?? "")
+  const clinicName = locale === "ar" ? (clinic?.nameAr ?? clinic?.name ?? "") : (clinic?.name ?? "")
   const age = calcAge(invoice.patient.dateOfBirth)
   const patientName = [invoice.patient.firstName, invoice.patient.middleName, invoice.patient.lastName].filter(Boolean).join(" ")
-  const dentistName = invoice.dentist ? (ar && invoice.dentist.nameAr ? invoice.dentist.nameAr : invoice.dentist.name) : ""
+  const dentistName = invoice.dentist ? (locale === "ar" && invoice.dentist.nameAr ? invoice.dentist.nameAr : invoice.dentist.name) : ""
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-3xl p-4 sm:p-8">
@@ -58,10 +59,10 @@ export default async function InvoicePrintPage({ params }: Props) {
         <Button variant="ghost" asChild>
           <Link href="/invoices">
             <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
-            {ar ? "العودة للفواتير" : "Back"}
+            {t.common.back}
           </Link>
         </Button>
-        <PrintButton label={ar ? "طباعة" : "Print"} />
+        <PrintButton label={t.common.print} />
       </div>
 
       <div className="rounded-xl border bg-background p-6 text-foreground sm:p-8">
@@ -73,32 +74,32 @@ export default async function InvoicePrintPage({ params }: Props) {
           </p>
           <p className="mt-2 text-lg font-semibold tabular-nums">{invoice.invoiceNo}</p>
           <h2 className="text-sm uppercase tracking-wide text-muted-foreground">
-            {ar ? "فاتورة" : "Invoice"} · {invoiceStatusLabel(invoice.status, locale)}
+            {t.billing.invoice} · {invoiceStatusLabel(invoice.status, locale)}
           </h2>
         </header>
 
         <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
           <div>
-            <p className="text-xs text-muted-foreground">{ar ? "المريض" : "Patient"}</p>
+            <p className="text-xs text-muted-foreground">{t.billing.patient}</p>
             <p className="font-semibold">{patientName}</p>
             <p className="text-muted-foreground">
               {invoice.patient.patientNo}
-              {age !== null ? ` · ${ar ? `العمر ${age}` : `Age ${age}`}` : ""}
+              {age !== null ? ` · ${t.print.age} ${age}` : ""}
             </p>
             <p className="text-muted-foreground">{invoice.patient.phone ?? ""}</p>
           </div>
           <div className="sm:text-end">
-            <p className="text-xs text-muted-foreground">{ar ? "التاريخ" : "Date"}</p>
+            <p className="text-xs text-muted-foreground">{t.billing.invoiceDate}</p>
             <p className="font-semibold">{formatDate(invoice.issueDate, locale)}</p>
             {invoice.dueDate && (
               <>
-                <p className="mt-1 text-xs text-muted-foreground">{ar ? "تاريخ الاستحقاق" : "Due date"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t.billing.dueDate}</p>
                 <p className="font-medium">{formatDate(invoice.dueDate, locale)}</p>
               </>
             )}
             {dentistName && (
               <>
-                <p className="mt-1 text-xs text-muted-foreground">{ar ? "الطبيب" : "Dentist"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t.billing.dentist}</p>
                 <p className="font-medium">{dentistName}</p>
               </>
             )}
@@ -111,11 +112,11 @@ export default async function InvoicePrintPage({ params }: Props) {
           <thead>
             <tr className="border-b text-xs uppercase text-muted-foreground">
               <th className="py-2 text-start font-medium">#</th>
-              <th className="py-2 text-start font-medium">{ar ? "الوصف" : "Description"}</th>
-              <th className="py-2 text-start font-medium">{ar ? "السن" : "Tooth"}</th>
-              <th className="py-2 text-center font-medium">{ar ? "الكمية" : "Qty"}</th>
-              <th className="py-2 text-end font-medium">{ar ? "سعر الوحدة" : "Unit price"}</th>
-              <th className="py-2 text-end font-medium">{ar ? "الإجمالي" : "Total"}</th>
+              <th className="py-2 text-start font-medium">{t.billing.description}</th>
+              <th className="py-2 text-start font-medium">{t.billing.tooth}</th>
+              <th className="py-2 text-center font-medium">{t.billing.quantity}</th>
+              <th className="py-2 text-end font-medium">{t.billing.unitPrice}</th>
+              <th className="py-2 text-end font-medium">{t.billing.total}</th>
             </tr>
           </thead>
           <tbody>
@@ -134,38 +135,38 @@ export default async function InvoicePrintPage({ params }: Props) {
 
         <div className="mt-4 ml-auto w-full max-w-xs space-y-1 text-sm">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">{ar ? "المجموع الفرعي" : "Subtotal"}</span>
+            <span className="text-muted-foreground">{t.billing.subtotal}</span>
             <span className="tabular-nums">{formatCurrency(invoice.subtotal)}</span>
           </div>
           {invoice.discount.toNumber() > 0 && (
             <div className="flex justify-between">
-              <span className="text-muted-foreground">{ar ? "الخصم" : "Discount"}</span>
+              <span className="text-muted-foreground">{t.billing.discount}</span>
               <span className="tabular-nums">{formatCurrency(invoice.discount)}</span>
             </div>
           )}
           {invoice.tax.toNumber() > 0 && (
             <div className="flex justify-between">
-              <span className="text-muted-foreground">{ar ? "الضريبة" : "Tax"}</span>
+              <span className="text-muted-foreground">{t.billing.tax}</span>
               <span className="tabular-nums">{formatCurrency(invoice.tax)}</span>
             </div>
           )}
           <div className="flex justify-between border-t pt-1 text-base font-semibold">
-            <span>{ar ? "الإجمالي" : "Total"}</span>
+            <span>{t.billing.total}</span>
             <span className="tabular-nums">{formatCurrency(invoice.total)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">{ar ? "المدفوع" : "Paid"}</span>
+            <span className="text-muted-foreground">{t.billing.paid}</span>
             <span className="tabular-nums">{formatCurrency(invoice.paid)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="font-medium">{ar ? "المتبقي" : "Remaining"}</span>
+            <span className="font-medium">{t.billing.remaining}</span>
             <span className="tabular-nums font-semibold">{formatCurrency(invoice.remaining)}</span>
           </div>
         </div>
 
         {invoice.notes && (
           <p className="mt-4 text-sm">
-            <span className="font-medium">{ar ? "ملاحظات: " : "Notes: "}</span>
+            <span className="font-medium">{t.billing.notes}:</span>
             {invoice.notes}
           </p>
         )}
@@ -176,10 +177,10 @@ export default async function InvoicePrintPage({ params }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-xs uppercase text-muted-foreground">
-                  <th className="py-2 text-start font-medium">{ar ? "التاريخ" : "Date"}</th>
-                  <th className="py-2 text-start font-medium">{ar ? "الطريقة" : "Method"}</th>
-                  <th className="py-2 text-start font-medium">{ar ? "المرجع" : "Reference"}</th>
-                  <th className="py-2 text-end font-medium">{ar ? "المبلغ" : "Amount"}</th>
+                  <th className="py-2 text-start font-medium">{t.payments.paidAt}</th>
+                  <th className="py-2 text-start font-medium">{t.billing.method}</th>
+                  <th className="py-2 text-start font-medium">{t.billing.reference}</th>
+                  <th className="py-2 text-end font-medium">{t.payments.amount}</th>
                 </tr>
               </thead>
               <tbody>
@@ -198,10 +199,10 @@ export default async function InvoicePrintPage({ params }: Props) {
 
         <div className="mt-10 grid grid-cols-2 gap-8 text-sm">
           <div className="h-16 border-t pt-1 text-center text-xs text-muted-foreground">
-            {ar ? "توقيع الطبيب" : "Doctor's signature"}
+            {t.print.doctorSignature}
           </div>
           <div className="h-16 border-t pt-1 text-center text-xs text-muted-foreground">
-            {ar ? "ختم العيادة" : "Clinic stamp"}
+            {t.print.clinicStamp}
           </div>
         </div>
       </div>

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { getI18n } from "@/lib/i18n-server"
 
 interface Props {
   params: Promise<{ id: string }>
@@ -25,7 +26,7 @@ export default async function InvoiceDetailPage({ params }: Props) {
   const { id } = await params
   const cookieStore = await cookies()
   const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
-  const ar = locale === "ar"
+  const { t } = await getI18n()
 
   const invoice = await prisma.invoice.findUnique({
     where: { id },
@@ -53,13 +54,13 @@ export default async function InvoiceDetailPage({ params }: Props) {
         <Button variant="ghost" asChild>
           <Link href="/invoices">
             <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
-            {ar ? "العودة للفواتير" : "Back to invoices"}
+            {t.billing.back}
           </Link>
         </Button>
         <Button variant="outline" size="sm" asChild>
           <Link href={`/print/invoices/${invoice.id}`}>
             <Printer className="h-3.5 w-3.5" />
-            {ar ? "طباعة" : "Print"}
+            {t.common.print}
           </Link>
         </Button>
       </div>
@@ -86,20 +87,20 @@ export default async function InvoiceDetailPage({ params }: Props) {
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "المريض" : "Patient"}</p>
+              <p className="text-xs text-muted-foreground">{t.billing.patient}</p>
               <Link href={`/patients/${invoice.patient.id}`} className="font-medium hover:underline">{patientName}</Link>
               <p className="text-xs text-muted-foreground">{invoice.patient.patientNo}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "الطبيب" : "Dentist"}</p>
-              <p className="font-medium">{invoice.dentist ? (ar && invoice.dentist.nameAr ? invoice.dentist.nameAr : invoice.dentist.name) : "—"}</p>
+              <p className="text-xs text-muted-foreground">{t.billing.dentist}</p>
+              <p className="font-medium">{invoice.dentist ? (locale === "ar" && invoice.dentist.nameAr ? invoice.dentist.nameAr : invoice.dentist.name) : "—"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "تاريخ الاستحقاق" : "Due date"}</p>
+              <p className="text-xs text-muted-foreground">{t.billing.dueDate}</p>
               <p className="font-medium">{invoice.dueDate ? formatDate(invoice.dueDate, locale) : "—"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "ملاحظات" : "Notes"}</p>
+              <p className="text-xs text-muted-foreground">{t.billing.notes}</p>
               <p className="font-medium">{invoice.notes || "—"}</p>
             </div>
           </CardContent>
@@ -107,25 +108,25 @@ export default async function InvoiceDetailPage({ params }: Props) {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">{ar ? "البنود" : "Items"}</CardTitle>
+            <CardTitle className="text-lg">{t.billing.items}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{ar ? "الوصف" : "Description"}</TableHead>
-                    <TableHead>{ar ? "السن" : "Tooth"}</TableHead>
-                    <TableHead className="text-center">{ar ? "الكمية" : "Qty"}</TableHead>
-                    <TableHead className="text-end">{ar ? "سعر الوحدة" : "Unit price"}</TableHead>
-                    <TableHead className="text-end">{ar ? "الخصم" : "Discount"}</TableHead>
-                    <TableHead className="text-end">{ar ? "الإجمالي" : "Total"}</TableHead>
+                    <TableHead>{t.billing.description}</TableHead>
+                    <TableHead>{t.billing.tooth}</TableHead>
+                    <TableHead className="text-center">{t.billing.quantity}</TableHead>
+                    <TableHead className="text-end">{t.billing.unitPrice}</TableHead>
+                    <TableHead className="text-end">{t.billing.discount}</TableHead>
+                    <TableHead className="text-end">{t.billing.total}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {invoice.items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">{ar ? "لا توجد بنود" : "No items"}</TableCell>
+                      <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">{t.billing.noItems}</TableCell>
                     </TableRow>
                   ) : (
                     invoice.items.map((it) => (
@@ -149,27 +150,27 @@ export default async function InvoiceDetailPage({ params }: Props) {
             <Separator className="my-4" />
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">{ar ? "المجموع الفرعي" : "Subtotal"}</span>
+                <span className="text-muted-foreground">{t.billing.subtotal}</span>
                 <span className="tabular-nums">{formatCurrency(invoice.subtotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">{ar ? "الخصم" : "Discount"}</span>
+                <span className="text-muted-foreground">{t.billing.discount}</span>
                 <span className="tabular-nums">{formatCurrency(invoice.discount)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">{ar ? "الضريبة" : "Tax"}</span>
+                <span className="text-muted-foreground">{t.billing.tax}</span>
                 <span className="tabular-nums">{formatCurrency(invoice.tax)}</span>
               </div>
               <div className="flex justify-between text-base font-semibold">
-                <span>{ar ? "الإجمالي" : "Total"}</span>
+                <span>{t.billing.total}</span>
                 <span className="tabular-nums">{formatCurrency(invoice.total)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">{ar ? "المدفوع" : "Paid"}</span>
+                <span className="text-muted-foreground">{t.billing.paid}</span>
                 <span className="tabular-nums">{formatCurrency(invoice.paid)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">{ar ? "المتبقي" : "Remaining"}</span>
+                <span className="text-muted-foreground">{t.billing.remaining}</span>
                 <span className="tabular-nums font-medium">{formatCurrency(invoice.remaining)}</span>
               </div>
             </div>
@@ -183,7 +184,7 @@ export default async function InvoiceDetailPage({ params }: Props) {
                     patientNo={invoice.patient.patientNo}
                     invoiceId={invoice.id}
                     remaining={invoice.remaining.toNumber()}
-                    trigger={<Button>{ar ? "تسجيل دفعة" : "Record Payment"}</Button>}
+                    trigger={<Button>{t.billing.recordPayment}</Button>}
                   />
                 </div>
               </>
@@ -193,25 +194,25 @@ export default async function InvoiceDetailPage({ params }: Props) {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">{ar ? "المدفوعات" : "Payments"}</CardTitle>
+            <CardTitle className="text-lg">{t.payments.title}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{ar ? "التاريخ" : "Date"}</TableHead>
-                    <TableHead className="text-end">{ar ? "المبلغ" : "Amount"}</TableHead>
-                    <TableHead>{ar ? "الطريقة" : "Method"}</TableHead>
-                    <TableHead>{ar ? "المرجع" : "Reference"}</TableHead>
-                    <TableHead>{ar ? "استلمها" : "Received by"}</TableHead>
-                    {user.permissions.includes("payments:refund") && <TableHead className="text-end">{ar ? "إجراءات" : "Actions"}</TableHead>}
+                    <TableHead>{t.payments.paidAt}</TableHead>
+                    <TableHead className="text-end">{t.payments.amount}</TableHead>
+                    <TableHead>{t.billing.method}</TableHead>
+                    <TableHead>{t.billing.reference}</TableHead>
+                    <TableHead>{t.payments.receivedBy}</TableHead>
+                    {user.permissions.includes("payments:refund") && <TableHead className="text-end">{t.common.actions}</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {invoice.payments.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">{ar ? "لا توجد مدفوعات" : "No payments yet"}</TableCell>
+                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">{t.billing.noPayments}</TableCell>
                     </TableRow>
                   ) : (
                     invoice.payments.map((p) => (
@@ -220,7 +221,7 @@ export default async function InvoiceDetailPage({ params }: Props) {
                         <TableCell className="text-end tabular-nums">{formatCurrency(p.amount)}</TableCell>
                         <TableCell>{paymentMethodLabel(p.method, locale)}</TableCell>
                         <TableCell>{p.reference ?? "—"}</TableCell>
-                        <TableCell>{p.receivedBy ? (ar && p.receivedBy.nameAr ? p.receivedBy.nameAr : p.receivedBy.name) : "—"}</TableCell>
+                        <TableCell>{p.receivedBy ? (locale === "ar" && p.receivedBy.nameAr ? p.receivedBy.nameAr : p.receivedBy.name) : "—"}</TableCell>
                         {user.permissions.includes("payments:refund") && (
                           <TableCell className="text-end">
                             <RefundPaymentButton paymentId={p.id} />

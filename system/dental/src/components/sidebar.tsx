@@ -183,7 +183,7 @@ function SidebarBody({
 
 export function DesktopSidebar({ user }: { user: CurrentUser }) {
   const [collapsed, setCollapsed] = useState(false)
-  const { locale } = useI18n()
+  const { t, locale } = useI18n()
 
   return (
     <aside
@@ -197,7 +197,7 @@ export function DesktopSidebar({ user }: { user: CurrentUser }) {
         <button
           onClick={() => setCollapsed((c) => !c)}
           className="absolute -end-3 top-7 z-10 flex h-6 w-6 items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:bg-accent"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={collapsed ? t.nav.expandSidebar : t.nav.collapseSidebar}
         >
           {collapsed ? (
             <ChevronsRight className={cn("h-3.5 w-3.5", locale === "ar" && "rotate-180")} />
@@ -219,6 +219,7 @@ export function MobileSidebar({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useI18n()
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetTrigger asChild>
@@ -226,7 +227,7 @@ export function MobileSidebar({
       </SheetTrigger>
       <SheetContent side="left" className="w-[280px] p-0">
         <SheetHeader className="sr-only">
-          <SheetTitle>Navigation</SheetTitle>
+          <SheetTitle>{t.nav.menu}</SheetTitle>
         </SheetHeader>
         <SidebarBody user={user} collapsed={false} onLinkClick={() => onOpenChange(false)} />
       </SheetContent>

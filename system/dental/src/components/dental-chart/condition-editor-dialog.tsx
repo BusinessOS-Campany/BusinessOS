@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { useI18n } from "@/components/lang-provider"
 import { Check, Loader2, Plus, Trash2 } from "lucide-react"
 import { saveToothConditionsAction, removeToothConditionAction } from "@/lib/actions/dental-chart"
 import { CONDITION_VISUALS, TOOTH_CONDITIONS, TOOTH_SURFACES, SEVERITIES } from "@/lib/constants/clinical"
@@ -54,6 +55,7 @@ interface Props {
 }
 
 export function ConditionEditorDialog({ open, onOpenChange, tooth, record, patientId, dentition, canEdit, locale }: Props) {
+  const { t } = useI18n()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [condition, setCondition] = useState("CARIES")
@@ -99,7 +101,7 @@ export function ConditionEditorDialog({ open, onOpenChange, tooth, record, patie
         setNotes("")
         router.refresh()
       } else {
-        setMessage(res.error === "permission" ? "missing permission" : "save failed")
+        setMessage(res.error === "permission" ? t.chart.permissionMsg : t.chart.saveFailed)
       }
     })
   }
@@ -109,7 +111,7 @@ export function ConditionEditorDialog({ open, onOpenChange, tooth, record, patie
     startTransition(async () => {
       const res = await removeToothConditionAction(id)
       if (res.ok) router.refresh()
-      else setMessage("remove failed")
+      else setMessage(t.chart.removeFailed)
     })
   }
 
@@ -121,7 +123,7 @@ export function ConditionEditorDialog({ open, onOpenChange, tooth, record, patie
             #{tooth.number} — {locale === "ar" ? tooth.nameAr : tooth.nameEn}
           </DialogTitle>
           <DialogDescription>
-            {locale === "ar" ? "حالة السن والسطح المشترك" : "Tooth condition and affected surfaces"}
+            {t.chart.conditionHint}
           </DialogDescription>
         </DialogHeader>
 
@@ -130,7 +132,7 @@ export function ConditionEditorDialog({ open, onOpenChange, tooth, record, patie
 
           {conditions.length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs font-medium uppercase text-muted-foreground">Conditions</p>
+              <p className="text-xs font-medium uppercase text-muted-foreground">{t.chart.conditions}</p>
               <ul className="space-y-2">
                 {conditions.map((c) => (
                   <li key={c.id} className="flex items-start justify-between gap-3 rounded-md border bg-background px-3 py-2">
@@ -160,7 +162,7 @@ export function ConditionEditorDialog({ open, onOpenChange, tooth, record, patie
                         onClick={() => removeCondition(c.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                        <span className="sr-only">remove</span>
+                        <span className="sr-only">{t.ui.remove}</span>
                       </Button>
                     )}
                   </li>
@@ -170,20 +172,20 @@ export function ConditionEditorDialog({ open, onOpenChange, tooth, record, patie
           )}
 
           {conditions.length === 0 && !canEdit && (
-            <p className="text-sm text-muted-foreground">{locale === "ar" ? "لا توجد حالات مسجلة" : "No conditions recorded"}</p>
+            <p className="text-sm text-muted-foreground">{t.chart.noConditions}</p>
           )}
 
           {canEdit && (
             <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
               <p className="text-xs font-medium uppercase text-muted-foreground">
-                {locale === "ar" ? "إضافة حالة" : "Add condition"}
+                {t.chart.addCondition}
               </p>
 
               <div className="space-y-1.5">
-                <Label>{locale === "ar" ? "الحالة" : "Condition"}</Label>
+                <Label>{t.dentalChart.condition}</Label>
                 <Select value={condition} onValueChange={setCondition}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Condition" />
+                    <SelectValue placeholder={t.dentalChart.condition} />
                   </SelectTrigger>
                   <SelectContent>
                     {TOOTH_CONDITIONS.map((c) => (
@@ -196,7 +198,7 @@ export function ConditionEditorDialog({ open, onOpenChange, tooth, record, patie
               </div>
 
               <div className="space-y-1.5">
-                <Label>{locale === "ar" ? "الأسطح" : "Surfaces"}</Label>
+                <Label>{t.chart.surfaces}</Label>
                 <div className="flex flex-wrap gap-2">
                   {TOOTH_SURFACES.map((s) => {
                     const checked = surfaces.includes(s.value)
@@ -224,10 +226,10 @@ export function ConditionEditorDialog({ open, onOpenChange, tooth, record, patie
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>{locale === "ar" ? "الشدة" : "Severity"}</Label>
+                  <Label>{t.dentalChart.severity}</Label>
                   <Select value={severity} onValueChange={setSeverity}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder={locale === "ar" ? "اختر" : "None"} />
+                      <SelectValue placeholder={t.common.select} />
                     </SelectTrigger>
                     <SelectContent>
                       {SEVERITIES.map((s) => (
@@ -239,14 +241,14 @@ export function ConditionEditorDialog({ open, onOpenChange, tooth, record, patie
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>{locale === "ar" ? "الملاحظات" : "Notes"}</Label>
+                  <Label>{t.common.notes}</Label>
                   <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
                 </div>
               </div>
 
               <Button type="button" size="sm" onClick={addCondition} disabled={isPending} className="w-full">
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                {locale === "ar" ? "إضافة" : "Add"}
+                {t.common.add}
               </Button>
             </div>
           )}
@@ -254,7 +256,7 @@ export function ConditionEditorDialog({ open, onOpenChange, tooth, record, patie
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {locale === "ar" ? "إغلاق" : "Close"}
+            {t.common.close}
           </Button>
         </DialogFooter>
       </DialogContent>

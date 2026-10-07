@@ -61,7 +61,7 @@ export function ImagingGrid({ records, canDelete }: Props) {
               </div>
             ) : (
               <div className="flex aspect-video w-full items-center justify-center bg-muted text-sm text-muted-foreground">
-                {r.mimeType ?? "file"}
+                {r.mimeType ?? t.imaging.file}
               </div>
             )}
             <CardContent className="p-3">

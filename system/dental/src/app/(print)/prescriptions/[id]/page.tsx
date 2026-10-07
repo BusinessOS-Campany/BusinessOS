@@ -1,10 +1,9 @@
 import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/dal"
 import { prisma } from "@/lib/prisma"
-import { cookies } from "next/headers"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
-import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { PrintButton } from "@/components/prescriptions/print-button"
@@ -17,8 +16,7 @@ interface Props {
 export default async function PrescriptionPrintPage({ params }: Props) {
   const user = await requirePermission("prescriptions:view")
   const { id } = await params
-  const cookieStore = await cookies()
-  const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t, locale } = await getI18n()
 
   const rx = await prisma.prescription.findUnique({
     where: { id },
@@ -50,18 +48,16 @@ export default async function PrescriptionPrintPage({ params }: Props) {
   const doctorName =
     rx.dentist?.user.nameAr && locale === "ar" ? (rx.dentist.user.nameAr ?? rx.dentist.user.name) : rx.dentist?.user.name ?? ""
 
-  const ar = locale === "ar"
-
   return (
     <div className="mx-auto min-h-screen w-full max-w-3xl p-4 sm:p-8">
       <div className="mb-4 flex items-center justify-between print:hidden">
         <Button variant="ghost" asChild>
           <Link href="/prescriptions">
             <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
-            {ar ? "العودة للوصفات" : "Back"}
+            {t.prescriptions.back}
           </Link>
         </Button>
-        <PrintButton label={ar ? "طباعة" : "Print"} />
+        <PrintButton label={t.common.print} />
       </div>
 
       <div className="rounded-xl border bg-background p-6 text-foreground sm:p-8">
@@ -72,26 +68,26 @@ export default async function PrescriptionPrintPage({ params }: Props) {
             {clinic?.phone ? ` · ${clinic.phone}` : ""}
           </p>
           <h2 className="mt-2 text-lg font-semibold underline underline-offset-4">
-            {ar ? "وصفة طبية" : "Prescription"}
+            {t.prescriptions.title}
           </h2>
         </header>
 
         <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
           <div>
-            <p className="text-xs text-muted-foreground">{ar ? "المريض" : "Patient"}</p>
+            <p className="text-xs text-muted-foreground">{t.prescriptions.patient}</p>
             <p className="font-semibold">{patientName}</p>
             <p className="text-muted-foreground">
               {rx.patient.patientNo}
-              {age !== null ? ` · ${ar ? `العمر ${age}` : `Age ${age}`}` : ""}
+              {age !== null ? ` · ${t.patients.age} ${age}` : ""}
             </p>
             <p className="text-muted-foreground">{rx.patient.phone ?? ""}</p>
           </div>
           <div className="sm:text-end">
-            <p className="text-xs text-muted-foreground">{ar ? "التاريخ" : "Date"}</p>
+            <p className="text-xs text-muted-foreground">{t.prescriptions.date}</p>
             <p className="font-semibold">{formatDate(rx.date, locale)}</p>
             {doctorName && (
               <>
-                <p className="mt-1 text-xs text-muted-foreground">{ar ? "الطبيب" : "Prescribed by"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t.prescriptions.dentist}</p>
                 <p className="font-medium">{doctorName}</p>
               </>
             )}
@@ -104,12 +100,12 @@ export default async function PrescriptionPrintPage({ params }: Props) {
           <thead>
             <tr className="border-b text-xs uppercase text-muted-foreground">
               <th className="py-2 text-start font-medium">#</th>
-              <th className="py-2 text-start font-medium">{ar ? "الدواء" : "Medication"}</th>
-              <th className="py-2 text-start font-medium">Dose</th>
-              <th className="py-2 text-start font-medium">{ar ? "مرات/يوم" : "Frequency"}</th>
-              <th className="py-2 text-start font-medium">{ar ? "المدة" : "Duration"}</th>
-              <th className="py-2 text-start font-medium">Route</th>
-              <th className="py-2 text-end font-medium">{ar ? "الكمية" : "Qty"}</th>
+              <th className="py-2 text-start font-medium">{t.page.medication}</th>
+              <th className="py-2 text-start font-medium">{t.page.dose}</th>
+              <th className="py-2 text-start font-medium">{t.page.frequency}</th>
+              <th className="py-2 text-start font-medium">{t.page.duration}</th>
+              <th className="py-2 text-start font-medium">{t.page.route}</th>
+              <th className="py-2 text-end font-medium">{t.common.quantity}</th>
             </tr>
           </thead>
           <tbody>
@@ -131,8 +127,8 @@ export default async function PrescriptionPrintPage({ params }: Props) {
           <table className="mt-3 w-full text-sm">
             <thead>
               <tr className="border-b text-xs uppercase text-muted-foreground">
-                <th className="py-2 text-start font-medium">{ar ? "الدواء" : "Medication"}</th>
-                <th className="py-2 text-start font-medium">{ar ? "تعليمات" : "Instructions"}</th>
+                <th className="py-2 text-start font-medium">{t.page.medication}</th>
+                <th className="py-2 text-start font-medium">{t.page.instructions}</th>
               </tr>
             </thead>
             <tbody>
@@ -152,13 +148,13 @@ export default async function PrescriptionPrintPage({ params }: Props) {
           <div className="mt-5 space-y-2 text-sm">
             {rx.instructions && (
               <p>
-                <span className="font-medium">{ar ? "تعليمات عامة: " : "General instructions: "}</span>
+                <span className="font-medium">{t.page.generalInstructions}: </span>
                 {rx.instructions}
               </p>
             )}
             {rx.notes && (
               <p>
-                <span className="font-medium">{ar ? "ملاحظات: " : "Notes: "}</span>
+                <span className="font-medium">{t.page.notesColon}</span>
                 {rx.notes}
               </p>
             )}
@@ -167,10 +163,10 @@ export default async function PrescriptionPrintPage({ params }: Props) {
 
         <div className="mt-10 grid grid-cols-2 gap-8 text-sm">
           <div className="h-16 border-t pt-1 text-center text-xs text-muted-foreground">
-            {ar ? "توقيع الطبيب" : "Doctor's signature"}
+            {t.page.doctorSignature}
           </div>
           <div className="h-16 border-t pt-1 text-center text-xs text-muted-foreground">
-            {ar ? "ختم العيادة" : "Clinic stamp"}
+            {t.page.clinicStamp}
           </div>
         </div>
       </div>

@@ -8,13 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Trash2 } from "lucide-react"
 
 export function DeleteExpenseButton({ expenseId }: { expenseId: string }) {
-  const { locale } = useI18n()
+  const { t } = useI18n()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   const onDelete = () => {
-    if (!window.confirm(ar ? "حذف هذا المصروف؟" : "Delete this expense?")) return
+    if (!window.confirm(t.expenses.deleteConfirm)) return
     startTransition(async () => {
       await deleteExpenseAction(expenseId)
       router.refresh()
@@ -22,7 +21,7 @@ export function DeleteExpenseButton({ expenseId }: { expenseId: string }) {
   }
 
   return (
-    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" disabled={isPending} onClick={onDelete} title={ar ? "حذف" : "Delete"}>
+    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" disabled={isPending} onClick={onDelete} title={t.common.delete}>
       <Trash2 className="h-3.5 w-3.5" />
     </Button>
   )

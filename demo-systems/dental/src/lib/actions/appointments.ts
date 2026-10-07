@@ -4,6 +4,7 @@ import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { requirePermission } from "@/lib/dal"
 import { logAudit } from "@/lib/audit"
+import { notifyAppointmentCreated } from "@/lib/notifications"
 
 const appointmentSchema = z.object({
   patientId: z.string().min(1),
@@ -97,6 +98,20 @@ export async function createAppointmentAction(
     recordId: created.id,
     newValue: { date, startTime, endTime },
   })
+
+  const booked = await prisma.patient.findUnique({
+    where: { id: parsed.data.patientId },
+    select: { firstName: true, lastName: true },
+  })
+  if (booked) {
+    await notifyAppointmentCreated(prisma, {
+      actorUserId: user.id,
+      branchId,
+      patientName: `${booked.firstName} ${booked.lastName}`,
+      dateLabel: date,
+      startTime,
+    })
+  }
 
   return { ok: true, date: parsed.data.date }
 }

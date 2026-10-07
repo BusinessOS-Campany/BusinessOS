@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/dal"
 import { prisma } from "@/lib/prisma"
-import { cookies } from "next/headers"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
-import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
+import { statusLabel } from "@/lib/i18n"
 import { statusColor } from "@/lib/status-ui"
 import { formatCurrency, formatDate } from "@/lib/format"
 import { PlanStatusControls, type PlanProcedureLite } from "@/components/treatment-plans/plan-status-controls"
@@ -20,8 +20,7 @@ interface Props {
 export default async function TreatmentPlanDetailPage({ params }: Props) {
   const user = await requirePermission("treatmentPlans:view")
   const { id } = await params
-  const cookieStore = await cookies()
-  const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t, locale } = await getI18n()
   const ar = locale === "ar"
 
   const plan = await prisma.treatmentPlan.findUnique({
@@ -51,7 +50,7 @@ export default async function TreatmentPlanDetailPage({ params }: Props) {
         <Button variant="ghost" asChild>
           <Link href="/treatment-plans">
             <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
-            {ar ? "العودة لخطط العلاج" : "Back to plans"}
+            {t.page.backToPlans}
           </Link>
         </Button>
       </div>
@@ -61,36 +60,36 @@ export default async function TreatmentPlanDetailPage({ params }: Props) {
           <CardHeader className="flex flex-row items-start justify-between gap-4">
             <div>
               <CardTitle className="text-xl">{locale === "ar" ? plan.nameAr : plan.nameEn}</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">{plan.description || (ar ? "بدون وصف" : "No description")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{plan.description || t.page.noDescription}</p>
             </div>
             <span className="inline-flex items-center rounded-full border px-3 py-1 text-sm" style={{ borderColor: c.border, color: c.text, background: c.bg }}>
-              {plan.status}
+              {statusLabel(t, plan.status)}
             </span>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "المريض" : "Patient"}</p>
+              <p className="text-xs text-muted-foreground">{t.treatmentPlans.patient}</p>
               <Link href={`/patients/${plan.patient.id}`} className="font-medium hover:underline">{patientName}</Link>
               <p className="text-xs text-muted-foreground">{plan.patient.patientNo}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "الطبيب" : "Dentist"}</p>
+              <p className="text-xs text-muted-foreground">{t.treatmentPlans.dentist}</p>
               <p className="font-medium">{dentistName}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "التكلفة التقديرية" : "Estimated cost"}</p>
+              <p className="text-xs text-muted-foreground">{t.treatmentPlans.estimatedCost}</p>
               <p className="font-medium tabular-nums">{formatCurrency(plan.estimatedCost)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "التكلفة النهائية" : "Final cost"}</p>
+              <p className="text-xs text-muted-foreground">{t.treatmentPlans.finalCost}</p>
               <p className="font-medium tabular-nums">{formatCurrency(plan.finalCost)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "الخصم" : "Discount"}</p>
+              <p className="text-xs text-muted-foreground">{t.treatmentPlans.discount}</p>
               <p className="tabular-nums">{formatCurrency(plan.discount)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "تاريخ الإنشاء" : "Created"}</p>
+              <p className="text-xs text-muted-foreground">{t.treatmentPlans.createdAt}</p>
               <p>{formatDate(plan.createdAt, locale)}</p>
             </div>
           </CardContent>
@@ -98,27 +97,27 @@ export default async function TreatmentPlanDetailPage({ params }: Props) {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">{ar ? "الإجراءات" : "Procedures"}</CardTitle>
+            <CardTitle className="text-lg">{t.treatmentPlans.procedures}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{ar ? "الإجراء" : "Procedure"}</TableHead>
-                    <TableHead>{ar ? "السن" : "Tooth"}</TableHead>
-                    <TableHead className="text-center">{ar ? "الكمية" : "Qty"}</TableHead>
-                    <TableHead className="text-end">{ar ? "سعر الوحدة" : "Unit price"}</TableHead>
-                    <TableHead className="text-end">{ar ? "الخصم" : "Discount"}</TableHead>
-                    <TableHead className="text-end">{ar ? "الإجمالي" : "Total"}</TableHead>
-                    <TableHead>{ar ? "الحالة" : "Status"}</TableHead>
+                    <TableHead>{t.treatmentPlans.procedure}</TableHead>
+                    <TableHead>{t.treatmentPlans.tooth}</TableHead>
+                    <TableHead className="text-center">{t.treatmentPlans.quantity}</TableHead>
+                    <TableHead className="text-end">{t.treatmentPlans.unitPrice}</TableHead>
+                    <TableHead className="text-end">{t.treatmentPlans.discount}</TableHead>
+                    <TableHead className="text-end">{t.common.total}</TableHead>
+                    <TableHead>{t.treatmentPlans.status}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {plan.procedures.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
-                        {ar ? "لا توجد إجراءات في هذه الخطة" : "No procedures in this plan"}
+                        {t.treatmentPlans.noPlanProcedures}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -137,7 +136,7 @@ export default async function TreatmentPlanDetailPage({ params }: Props) {
                           <TableCell className="text-end tabular-nums">{formatCurrency(p.total)}</TableCell>
                           <TableCell>
                             <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs" style={{ borderColor: pc.border, color: pc.text, background: pc.bg }}>
-                              {p.status}
+                              {statusLabel(t, p.status)}
                             </span>
                           </TableCell>
                         </TableRow>
@@ -150,7 +149,7 @@ export default async function TreatmentPlanDetailPage({ params }: Props) {
 
             <Separator className="my-4" />
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">{ar ? "إجمالي الخطة" : "Plan total"}</span>
+              <span className="text-muted-foreground">{t.page.planTotal}</span>
               <span className="text-lg font-semibold tabular-nums">{formatCurrency(plan.finalCost)}</span>
             </div>
 

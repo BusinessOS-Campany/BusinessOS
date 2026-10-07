@@ -2,10 +2,11 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Menu, LogOut, User, Search, Bell } from "lucide-react"
+import { Menu, LogOut, User, Search } from "lucide-react"
 import { useI18n } from "@/components/lang-provider"
 import { LanguageSwitch } from "@/components/language-switch"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { NotificationBell } from "@/components/notification-bell"
 import { DesktopSidebar, MobileSidebar } from "@/components/sidebar"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
 import { logoutAction } from "@/lib/actions/auth"
+import type { NotificationDTO } from "@/lib/notifications"
 import type { CurrentUser } from "@/lib/dal"
 
 const initials = (name: string) =>
@@ -32,9 +34,13 @@ const initials = (name: string) =>
 
 export function AppShell({
   user,
+  notifications,
+  unreadCount,
   children,
 }: {
   user: CurrentUser
+  notifications: NotificationDTO[]
+  unreadCount: number
   children: React.ReactNode
 }) {
   const { t, locale } = useI18n()
@@ -55,21 +61,17 @@ export function AppShell({
             <span className="sr-only">{t.nav.menu}</span>
           </Button>
 
-          <div className="relative hidden sm:block">
+          <div className="relative hidden min-w-0 max-w-64 flex-1 sm:block">
             <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
               placeholder={t.app.searchPlaceholder}
-              className="h-9 w-64 rounded-full ps-9"
+              className="h-9 w-full rounded-full ps-9"
             />
           </div>
 
           <div className="ms-auto flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              <span className="sr-only">{t.app.notifications}</span>
-              <span className="absolute end-2 top-2 h-2 w-2 rounded-full bg-destructive" />
-            </Button>
+            <NotificationBell notifications={notifications} unreadCount={unreadCount} />
             <Separator orientation="vertical" className="mx-1 hidden h-6 sm:block" />
             <LanguageSwitch size="md" />
             <ThemeToggle />

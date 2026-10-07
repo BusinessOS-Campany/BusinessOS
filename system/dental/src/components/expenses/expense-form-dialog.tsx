@@ -35,19 +35,27 @@ interface Props {
   existing?: ExpenseLite | null
 }
 
+const EXPENSE_CAT_TO_KEY: Record<string, string> = {
+  RENT: "catRent",
+  SALARIES: "catSalaries",
+  UTILITIES: "catUtilities",
+  DENTAL_MATERIALS: "catDentalMaterials",
+  LABORATORY: "catLaboratory",
+  EQUIPMENT: "catEquipment",
+  MAINTENANCE: "catMaintenance",
+  MARKETING: "catMarketing",
+  OTHER: "catOther",
+}
+
 export function ExpenseFormDialog({ trigger, existing = null }: Props) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [category, setCategory] = useState(existing?.category ?? "OTHER")
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
-  const catLabel = (c: string) =>
-    ar
-      ? { RENT: "إيجار", SALARIES: "رواتب", UTILITIES: "مرافق", DENTAL_MATERIALS: "مواد طب أسنان", LABORATORY: "مختبر", EQUIPMENT: "معدات", MAINTENANCE: "صيانة", MARKETING: "تسويق", OTHER: "أخرى" }[c] ?? c
-      : { RENT: "Rent", SALARIES: "Salaries", UTILITIES: "Utilities", DENTAL_MATERIALS: "Dental materials", LABORATORY: "Laboratory", EQUIPMENT: "Equipment", MAINTENANCE: "Maintenance", MARKETING: "Marketing", OTHER: "Other" }[c] ?? c
+  const catLabel = (c: string) => t.expenses[EXPENSE_CAT_TO_KEY[c] as keyof typeof t.expenses] ?? c
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -61,7 +69,7 @@ export function ExpenseFormDialog({ trigger, existing = null }: Props) {
         router.refresh()
         setOpen(false)
       } else {
-        setError(ar ? "حدث خطأ أثناء الحفظ" : t.common.error)
+        setError(t.common.error)
       }
     })
   }
@@ -73,7 +81,7 @@ export function ExpenseFormDialog({ trigger, existing = null }: Props) {
         <form onSubmit={onSubmit} className="grid gap-4 py-2">
           <DialogHeader>
             <DialogTitle>{existing ? t.expenses.editExpense : t.expenses.newExpense}</DialogTitle>
-            <DialogDescription>{ar ? "سجل مصروفاً تشغيلياً" : "Record an operational expense"}</DialogDescription>
+            <DialogDescription>{t.dialogs.expenseHint}</DialogDescription>
           </DialogHeader>
 
           {existing && <input type="hidden" name="id" value={existing.id} />}
@@ -108,7 +116,7 @@ export function ExpenseFormDialog({ trigger, existing = null }: Props) {
 
           <div className="space-y-1.5">
             <Label>{t.expenses.description}</Label>
-            <Input name="description" defaultValue={existing?.description ?? ""} placeholder={ar ? "وصف المصروف…" : "Expense description…"} />
+            <Input name="description" defaultValue={existing?.description ?? ""} placeholder={t.dialogs.expenseDescPh} />
           </div>
 
           <div className="space-y-1.5">

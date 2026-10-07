@@ -1,10 +1,10 @@
 import { requirePermission } from "@/lib/dal"
 import { prisma } from "@/lib/prisma"
-import { cookies } from "next/headers"
 import Link from "next/link"
-import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
+import type { Dictionary } from "@/lib/i18n"
 import { formatDateTime } from "@/lib/format"
-import { AUDIT_MODULES, auditModuleLabel } from "@/lib/constants/admin"
+import { AUDIT_MODULES } from "@/lib/constants/admin"
 import { Pagination } from "@/components/patients/pagination"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,12 +29,43 @@ const actionColor: Record<string, { variant: "default" | "secondary" | "destruct
   LOGIN: { variant: "secondary" },
 }
 
+const MODULE_LABELS: Record<string, keyof Dictionary["nav"]> = {
+  Patients: "patients",
+  Appointments: "appointments",
+  WaitingRoom: "waitingRoom",
+  "Waiting Room": "waitingRoom",
+  DentalChart: "dentalChart",
+  "Dental Chart": "dentalChart",
+  Clinical: "clinic",
+  TreatmentPlans: "treatmentPlans",
+  "Treatment Plans": "treatmentPlans",
+  Prescriptions: "prescriptions",
+  Imaging: "imaging",
+  Invoices: "invoices",
+  Payments: "payments",
+  Installments: "installments",
+  Expenses: "expenses",
+  Inventory: "inventory",
+  Suppliers: "suppliers",
+  Laboratory: "laboratory",
+  Procedures: "procedures",
+  Staff: "staff",
+  Dentists: "dentists",
+  Settings: "settings",
+  Notifications: "notifications",
+  Auth: "auth",
+}
+
 export default async function AuditLogPage({ searchParams }: { searchParams?: SearchParams }) {
   await requirePermission("audit:view")
-  const cookieStore = await cookies()
-  const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t, locale } = await getI18n()
   const ar = locale === "ar"
   const url: Params = (await searchParams) ?? {}
+
+  const moduleLabel = (m: string): string => {
+    const key = MODULE_LABELS[m]
+    return key ? t.nav[key] : m
+  }
 
   const q = sp(url, "q")?.trim() ?? ""
   const moduleFilter = sp(url, "module") ?? ""
@@ -73,29 +104,29 @@ export default async function AuditLogPage({ searchParams }: { searchParams?: Se
   return (
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">{ar ? "سجل التدقيق" : "Audit Log"}</h1>
-        <p className="text-sm text-muted-foreground">{total} {ar ? "سجل" : "entries"}</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t.audit.title}</h1>
+        <p className="text-sm text-muted-foreground">{t.page.totalEntries.replace("{count}", String(total))}</p>
       </div>
 
       <Card className="overflow-hidden">
         <form method="GET" action="/audit-log" className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
           <div className="flex-1">
-            <Input type="search" name="q" defaultValue={q} placeholder={ar ? "بحث بالمستخدم أو الإجراء…" : "Search user or action…"} className="w-full" />
+            <Input type="search" name="q" defaultValue={q} placeholder={t.page.searchUserAction} className="w-full" />
           </div>
           <select
             name="module"
             defaultValue={moduleFilter}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="">{ar ? "كل الوحدات" : "All modules"}</option>
+            <option value="">{t.audit.filterModule}</option>
             {AUDIT_MODULES.map((m) => (
-              <option key={m} value={m}>{auditModuleLabel(m, locale)}</option>
+              <option key={m} value={m}>{moduleLabel(m)}</option>
             ))}
           </select>
-          <Button type="submit" variant="outline">{ar ? "تصفية" : "Filter"}</Button>
+          <Button type="submit" variant="outline">{t.common.filter}</Button>
           {(q || moduleFilter) && (
             <Button type="button" variant="ghost" asChild>
-              <Link href="/audit-log">{ar ? "مسح" : "Clear"}</Link>
+              <Link href="/audit-log">{t.common.clear}</Link>
             </Button>
           )}
         </form>
@@ -104,18 +135,18 @@ export default async function AuditLogPage({ searchParams }: { searchParams?: Se
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{ar ? "التاريخ" : "Date"}</TableHead>
-                <TableHead>{ar ? "الوحدة" : "Module"}</TableHead>
-                <TableHead>{ar ? "الإجراء" : "Action"}</TableHead>
-                <TableHead>{ar ? "المستخدم" : "User"}</TableHead>
-                <TableHead>{ar ? "السجل" : "Record"}</TableHead>
-                <TableHead>{ar ? "التفاصيل" : "Details"}</TableHead>
+                <TableHead>{t.common.date}</TableHead>
+                <TableHead>{t.audit.module}</TableHead>
+                <TableHead>{t.audit.action}</TableHead>
+                <TableHead>{t.audit.user}</TableHead>
+                <TableHead>{t.page.record}</TableHead>
+                <TableHead>{t.audit.details}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-16 text-center text-sm text-muted-foreground">{ar ? "لا توجد سجلات تدقيق" : "No audit entries found"}</TableCell>
+                  <TableCell colSpan={6} className="py-16 text-center text-sm text-muted-foreground">{t.audit.noData}</TableCell>
                 </TableRow>
               ) : (
                 rows.map((e) => {
@@ -124,17 +155,17 @@ export default async function AuditLogPage({ searchParams }: { searchParams?: Se
                     <TableRow key={e.id}>
                       <TableCell className="whitespace-nowrap text-sm">{formatDateTime(e.createdAt, locale)}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{auditModuleLabel(e.module, locale)}</Badge>
+                        <Badge variant="outline">{moduleLabel(e.module)}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={color.variant}>{e.action}</Badge>
+                        <Badge variant={color.variant}>{t.auditActions[e.action as keyof typeof t.auditActions] ?? e.action}</Badge>
                       </TableCell>
                       <TableCell className="text-sm">{e.user ? (ar && e.user.nameAr ? e.user.nameAr : e.user.name) : "—"}</TableCell>
                       <TableCell dir="ltr" className="text-xs font-mono text-muted-foreground">{e.recordId ?? "—"}</TableCell>
                       <TableCell className="max-w-xs">
                         {e.newValue ? (
                           <details>
-                            <summary className="cursor-pointer text-xs text-muted-foreground">{ar ? "عرض التفاصيل" : "Show details"}</summary>
+                            <summary className="cursor-pointer text-xs text-muted-foreground">{t.page.showDetails}</summary>
                             <pre dir="ltr" className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded border bg-muted p-2 font-mono text-[10px]">
                               {JSON.stringify(e.newValue, null, 2)}
                             </pre>

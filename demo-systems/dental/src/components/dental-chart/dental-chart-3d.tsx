@@ -8,7 +8,16 @@ import { TEETH_BY_DENTITION, type ToothMeta } from "@/lib/dental-tooth"
 import { CONDITION_VISUALS } from "@/lib/constants/clinical"
 import type { ToothRecordDTO } from "./condition-editor-dialog"
 
-const MODEL_URL = "/model/human_teeth.glb"
+/**
+ * Mount-relative, because `GLTFLoader` fetches this string verbatim and a raw
+ * fetch is never given this app's basePath for it: the root-absolute form asked
+ * the platform for `/model/human_teeth.glb` and 404'd in both the demo
+ * (`/demo/dental`) and an org's copy (`/<org>/dental`). Next removed `useHref`
+ * and exposes no public basePath hook, so this reads the value Next substitutes
+ * into the client bundle at build time — `/demo/dental` for the demo, and for an
+ * org the `SYSTEM_BASE_PATH` its supervisor already builds with.
+ */
+const MODEL_URL = `${process.env.__NEXT_BASE_PATH ?? ""}/model/human_teeth.glb`
 
 const HEALTHY_COLOR = CONDITION_VISUALS.HEALTHY.color
 

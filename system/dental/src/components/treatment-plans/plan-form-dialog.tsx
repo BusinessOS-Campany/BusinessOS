@@ -21,10 +21,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, ClipboardPlus } from "lucide-react"
 
 const SEVERITIES = [
-  { value: "MILD", en: "Mild", ar: "بسيط" },
-  { value: "MODERATE", en: "Moderate", ar: "متوسط" },
-  { value: "SEVERE", en: "Severe", ar: "شديد" },
-  { value: "CRITICAL", en: "Critical", ar: "حرج" },
+  { value: "MILD", key: "mild" },
+  { value: "MODERATE", key: "moderate" },
+  { value: "SEVERE", key: "severe" },
+  { value: "CRITICAL", key: "critical" },
 ] as const
 
 export type PlanOption = { id: string; label: string }
@@ -46,7 +46,7 @@ let rowSeq = 1000
 const newRow = (): Row => ({ rowId: `plan-${++rowSeq}`, procedureId: "" })
 
 export function TreatmentPlanFormDialog({ patients, dentists, procedures, defaultDentistId }: Props) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [patientId, setPatientId] = useState("")
@@ -55,7 +55,6 @@ export function TreatmentPlanFormDialog({ patients, dentists, procedures, defaul
   const [rows, setRows] = useState<Row[]>([newRow()])
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   const addRow = () => setRows((prev) => [...prev, newRow()])
   const removeRow = (rowId: string) => setRows((prev) => prev.filter((r) => r.rowId !== rowId))
@@ -65,18 +64,18 @@ export function TreatmentPlanFormDialog({ patients, dentists, procedures, defaul
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!patientId) {
-      setError(ar ? "حدد المريض أولاً" : t.common.select)
+      setError(t.common.select)
       return
     }
     const names = [e.currentTarget.elements.namedItem("nameEn"), e.currentTarget.elements.namedItem("nameAr")]
     if ((names[0] as HTMLInputElement | null)?.value.trim() === "" || (names[1] as HTMLInputElement | null)?.value.trim() === "") {
-      setError(ar ? "أدخل اسم الخطة بالعربية والإنجليزية" : "Plan name is required in both languages")
+      setError(t.dialogs.planRequiredBothLangs)
       return
     }
     const fd = new FormData(e.currentTarget)
     const procIds = fd.getAll("procedureId") as string[]
     if (procIds.length === 0 || procIds.every((p) => p === "")) {
-      setError(ar ? "أضف إجراءً واحداً على الأقل" : "Add at least one procedure")
+      setError(t.dialogs.planAddProcedure)
       return
     }
     setError(null)
@@ -88,7 +87,7 @@ export function TreatmentPlanFormDialog({ patients, dentists, procedures, defaul
         setPatientId("")
         setRows([newRow()])
       } else {
-        setError(ar ? "حدث خطأ أثناء الحفظ" : t.common.error)
+        setError(t.common.error)
       }
     })
   }
@@ -105,7 +104,7 @@ export function TreatmentPlanFormDialog({ patients, dentists, procedures, defaul
         <form onSubmit={onSubmit} className="grid gap-4 py-2">
           <DialogHeader>
             <DialogTitle>{t.treatmentPlans.newPlan}</DialogTitle>
-            <DialogDescription>{ar ? "خطة علاجية بمجموعة إجراءات مقترحة" : "A treatment plan with proposed procedures and pricing"}</DialogDescription>
+            <DialogDescription>{t.dialogs.planHint}</DialogDescription>
           </DialogHeader>
 
           <input type="hidden" name="patientId" value={patientId} />
@@ -115,11 +114,11 @@ export function TreatmentPlanFormDialog({ patients, dentists, procedures, defaul
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>{t.treatmentPlans.planNameEn} *</Label>
-              <Input name="nameEn" placeholder="Full upper arch restoration" />
+              <Input name="nameEn" placeholder={t.dialogs.planNamePh} />
             </div>
             <div className="space-y-1.5">
               <Label>{t.treatmentPlans.planNameAr} *</Label>
-              <Input name="nameAr" placeholder="ترميم كامل للفك العلوي" />
+              <Input name="nameAr" placeholder={t.dialogs.planNamePh} />
             </div>
             <div className="space-y-1.5">
               <Label>{t.patients.fullName} *</Label>
@@ -160,7 +159,7 @@ export function TreatmentPlanFormDialog({ patients, dentists, procedures, defaul
                 <SelectContent>
                   {SEVERITIES.map((s) => (
                     <SelectItem key={s.value} value={s.value}>
-                      {ar ? s.ar : s.en}
+                      {t.statuses[s.key]}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -215,7 +214,7 @@ export function TreatmentPlanFormDialog({ patients, dentists, procedures, defaul
                     <div className="flex items-end justify-end">
                       <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={() => removeRow(row.rowId)}>
                         <Trash2 className="h-4 w-4" />
-                        <span className="sr-only">remove</span>
+                        <span className="sr-only">{t.ui.remove}</span>
                       </Button>
                     </div>
                   )}

@@ -102,7 +102,7 @@ export default async function DentalChartPage({ searchParams }: { searchParams?:
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t.dentalChart.title}</h1>
           <p className="text-sm text-muted-foreground">
-            {locale === "ar" ? "اختر المريض لعرض مخطط أسنانه" : "Choose a patient to view their dental chart"}
+            {t.chart.choosePatient}
           </p>
         </div>
       </div>
@@ -113,7 +113,7 @@ export default async function DentalChartPage({ searchParams }: { searchParams?:
             type="search"
             name="q"
             defaultValue={q}
-            placeholder={locale === "ar" ? "بحث بالاسم أو رقم المريض أو الهاتف…" : "Search name, patient no., phone…"}
+            placeholder={t.chart.searchPh}
             className="flex-1"
           />
           {!q && patient && (
@@ -170,7 +170,7 @@ export default async function DentalChartPage({ searchParams }: { searchParams?:
             </div>
             <Button variant="outline" size="sm" asChild>
               <Link href={`/patients/${patient!.id}`}>
-                {locale === "ar" ? "ملف المريض" : "Patient profile"}
+                {t.chart.patientProfile}
               </Link>
             </Button>
           </div>

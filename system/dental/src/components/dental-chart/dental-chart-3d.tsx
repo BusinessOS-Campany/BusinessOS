@@ -4,11 +4,21 @@ import { Component, Suspense, useMemo, useState, type ReactNode } from "react"
 import { Canvas, type ThreeEvent } from "@react-three/fiber"
 import { Html, OrbitControls, useGLTF } from "@react-three/drei"
 import * as THREE from "three"
+import { useI18n } from "@/components/lang-provider"
 import { TEETH_BY_DENTITION, type ToothMeta } from "@/lib/dental-tooth"
 import { CONDITION_VISUALS } from "@/lib/constants/clinical"
 import type { ToothRecordDTO } from "./condition-editor-dialog"
 
-const MODEL_URL = "/model/human_teeth.glb"
+/**
+ * Mount-relative, because `GLTFLoader` fetches this string verbatim and a raw
+ * fetch is never given this app's basePath for it: the root-absolute form asked
+ * the platform for `/model/human_teeth.glb` and 404'd in both the demo
+ * (`/demo/dental`) and an org's copy (`/<org>/dental`). Next removed `useHref`
+ * and exposes no public basePath hook, so this reads the value Next substitutes
+ * into the client bundle at build time — `/demo/dental` for the demo, and for an
+ * org the `SYSTEM_BASE_PATH` its supervisor already builds with.
+ */
+const MODEL_URL = `${process.env.__NEXT_BASE_PATH ?? ""}/model/human_teeth.glb`
 
 const HEALTHY_COLOR = CONDITION_VISUALS.HEALTHY.color
 
@@ -445,6 +455,7 @@ function InteractiveModel({ records, dentition, onSelect, selectedNumber, locale
 }
 
 function Scene3D(props: ChartProps) {
+  const { t } = useI18n()
   return (
     <Canvas camera={{ position: [0, -0.3, 3.4], fov: 45 }} dpr={[1, 2]}>
       <ambientLight intensity={0.55} />
@@ -455,7 +466,7 @@ function Scene3D(props: ChartProps) {
         fallback={
           <Html center zIndexRange={[20, 0]}>
             <p className="rounded-md border bg-background/95 px-3 py-1.5 text-sm text-muted-foreground shadow-md">
-              Loading 3D model…
+              {t.chart.loading3d}
             </p>
           </Html>
         }
@@ -479,11 +490,12 @@ export class ChartErrorBoundary extends Component<{ fallback: ReactNode; childre
 }
 
 export function DentalChart3D(props: ChartProps) {
+  const { t } = useI18n()
   return (
     <ChartErrorBoundary
       fallback={
         <p className="rounded-lg border p-4 text-center text-sm text-muted-foreground">
-          3D model not available — use the 2D chart.
+          {t.chart.modelUnavailable}
         </p>
       }
     >

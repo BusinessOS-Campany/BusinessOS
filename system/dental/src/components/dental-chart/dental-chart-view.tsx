@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import dynamic from "next/dynamic"
+import { useI18n } from "@/components/lang-provider"
 import { cn } from "@/lib/utils"
 import { CONDITION_VISUALS } from "@/lib/constants/clinical"
 import type { ToothMeta } from "@/lib/dental-tooth"
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export function DentalChartView({ patientId, records, canEdit, locale }: Props) {
+  const { t } = useI18n()
   const [view, setView] = useState<"2d" | "3d">("2d")
   const [dentition, setDentition] = useState<"ADULT" | "PRIMARY">("ADULT")
   const [selected, setSelected] = useState<ToothMeta | null>(null)
@@ -52,7 +54,7 @@ export function DentalChartView({ patientId, records, canEdit, locale }: Props) 
                 view === v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
               )}
             >
-              {v === "2d" ? (locale === "ar" ? "ثنائي الأبعاد" : "2D") : "3D"}
+              {v === "2d" ? t.chart.view2d : "3D"}
             </button>
           ))}
         </div>
@@ -68,14 +70,14 @@ export function DentalChartView({ patientId, records, canEdit, locale }: Props) 
                 dentition === d ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
               )}
             >
-              {locale === "ar" ? (d === "ADULT" ? "دائم" : "لبني") : d === "ADULT" ? "Adult" : "Primary"}
+              {d === "ADULT" ? t.dentalChart.adult : t.dentalChart.primary}
             </button>
           ))}
         </div>
       </div>
 
       <p className="text-xs text-muted-foreground">
-        {locale === "ar" ? "انقر على أي سن لعرض أو تعديل حالته" : "Click a tooth to view or edit its condition"}
+        {t.chart.clickToEdit}
       </p>
 
       {view === "2d" ? (
@@ -83,7 +85,7 @@ export function DentalChartView({ patientId, records, canEdit, locale }: Props) 
       ) : (
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground">
-            {locale === "ar" ? "التشخيص التفاعلي — انقر على أي سن لتسجيل الحالة" : "Interactive diagnosis — click a tooth to record a condition"}
+            {t.chart.diagnosisHint}
           </p>
           <DentalChart3D
             records={records}
@@ -98,7 +100,7 @@ export function DentalChartView({ patientId, records, canEdit, locale }: Props) 
       <div className="flex flex-wrap gap-2 rounded-lg border bg-background p-3">
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-3 w-3 rounded-[3px]" style={{ backgroundColor: CONDITION_VISUALS.HEALTHY.color }} />
-          <span className="text-xs">{locale === "ar" ? "سليم" : "Healthy"}</span>
+          <span className="text-xs">{t.dentalChart.healthy}</span>
         </span>
         {presentConditions
           .filter((c) => CONDITION_VISUALS[c])

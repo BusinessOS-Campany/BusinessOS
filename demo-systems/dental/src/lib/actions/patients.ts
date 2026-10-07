@@ -5,6 +5,7 @@ import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { requirePermission } from "@/lib/dal"
 import { logAudit } from "@/lib/audit"
+import { notifyPatientCreated } from "@/lib/notifications"
 
 const patientSchema = z.object({
   firstName: z.string().trim().min(2),
@@ -110,6 +111,18 @@ export async function createPatientAction(
       recordId: patient.id,
       newValue: { patientNo },
     })
+
+    // The front desk needs to see a new record land. Without a branch there is
+    // nobody to address it to — `api/bos/link` provisions a platform user with
+    // `branchId: null` — so this is skipped rather than sent nowhere.
+    if (user.branchId) {
+      await notifyPatientCreated(prisma, {
+        actorUserId: user.id,
+        branchId: user.branchId,
+        patientId: patient.id,
+        patientName: `${data.firstName} ${data.lastName}`,
+      })
+    }
   } catch {
     return { error: "server" }
   }

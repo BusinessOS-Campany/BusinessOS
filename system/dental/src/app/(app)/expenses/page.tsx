@@ -4,6 +4,7 @@ import { cookies } from "next/headers"
 import Link from "next/link"
 import { Receipt } from "lucide-react"
 import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
 import { statusColor } from "@/lib/status-ui"
 import { formatCurrency, formatDate } from "@/lib/format"
 import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/constants/billing"
@@ -31,7 +32,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: Se
   const user = await requirePermission("expenses:view")
   const cookieStore = await cookies()
   const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
-  const ar = locale === "ar"
+  const { t } = await getI18n()
   const url: Params = (await searchParams) ?? {}
 
   const q = sp(url, "q")?.trim() ?? ""
@@ -65,15 +66,15 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: Se
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{ar ? "المصاريف" : "Expenses"}</h1>
-          <p className="text-sm text-muted-foreground">{total} {ar ? "مصروف" : "expenses"}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t.expenses.title}</h1>
+          <p className="text-sm text-muted-foreground">{t.page.totalExpenses.replace("{count}", String(total))}</p>
         </div>
         {user.permissions.includes("expenses:create") && (
           <ExpenseFormDialog
             trigger={
               <Button>
                 <Receipt className="h-4 w-4" />
-                {ar ? "تسجيل مصروف" : "Record Expense"}
+                {t.expenses.newExpense}
               </Button>
             }
           />
@@ -83,22 +84,22 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: Se
       <Card className="overflow-hidden">
         <form method="GET" action="/expenses" className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
           <div className="flex-1">
-            <Input type="search" name="q" defaultValue={q} placeholder={ar ? "بحث بالوصف…" : "Search description…"} className="w-full" />
+            <Input type="search" name="q" defaultValue={q} placeholder={t.expenses.searchPh} className="w-full" />
           </div>
           <select
             name="category"
             defaultValue={category}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="">{ar ? "كل الفئات" : "All categories"}</option>
+            <option value="">{t.ui.allCategories}</option>
             {EXPENSE_CATEGORIES.map((c) => (
               <option key={c} value={c}>{expenseCategoryLabel(c, locale)}</option>
             ))}
           </select>
-          <Button type="submit" variant="outline">{ar ? "تصفية" : "Filter"}</Button>
+          <Button type="submit" variant="outline">{t.common.filter}</Button>
           {(q || category) && (
             <Button type="button" variant="ghost" asChild>
-              <Link href="/expenses">{ar ? "مسح" : "Clear"}</Link>
+              <Link href="/expenses">{t.common.clear}</Link>
             </Button>
           )}
         </form>
@@ -107,20 +108,20 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: Se
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{ar ? "التاريخ" : "Date"}</TableHead>
-                <TableHead>{ar ? "الفئة" : "Category"}</TableHead>
-                <TableHead>{ar ? "الوصف" : "Description"}</TableHead>
-                <TableHead className="text-end">{ar ? "المبلغ" : "Amount"}</TableHead>
-                <TableHead>{ar ? "سجّلها" : "Recorded by"}</TableHead>
+                <TableHead>{t.expenses.date}</TableHead>
+                <TableHead>{t.expenses.category}</TableHead>
+                <TableHead>{t.expenses.description}</TableHead>
+                <TableHead className="text-end">{t.expenses.amount}</TableHead>
+                <TableHead>{t.expenses.paidBy}</TableHead>
                 {(user.permissions.includes("expenses:edit") || user.permissions.includes("expenses:delete")) && (
-                  <TableHead className="text-end">{ar ? "إجراءات" : "Actions"}</TableHead>
+                  <TableHead className="text-end">{t.common.actions}</TableHead>
                 )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-16 text-center text-sm text-muted-foreground">{ar ? "لا توجد مصاريف" : "No expenses recorded"}</TableCell>
+                  <TableCell colSpan={6} className="py-16 text-center text-sm text-muted-foreground">{t.expenses.noData}</TableCell>
                 </TableRow>
               ) : (
                 rows.map((e) => {
@@ -143,12 +144,12 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: Se
                       </TableCell>
                       <TableCell>{e.description ?? "—"}</TableCell>
                       <TableCell className="text-end tabular-nums font-medium">{formatCurrency(e.amount)}</TableCell>
-                      <TableCell>{e.paidBy ? (ar && e.paidBy.nameAr ? e.paidBy.nameAr : e.paidBy.name) : "—"}</TableCell>
+                      <TableCell>{e.paidBy ? (locale === "ar" && e.paidBy.nameAr ? e.paidBy.nameAr : e.paidBy.name) : "—"}</TableCell>
                       {(user.permissions.includes("expenses:edit") || user.permissions.includes("expenses:delete")) && (
                         <TableCell className="text-end">
                           <div className="flex items-center justify-end gap-2">
                             {user.permissions.includes("expenses:edit") && (
-                              <ExpenseFormDialog existing={lite} trigger={<Button variant="outline" size="sm">{ar ? "تعديل" : "Edit"}</Button>} />
+                              <ExpenseFormDialog existing={lite} trigger={<Button variant="outline" size="sm">{t.common.edit}</Button>} />
                             )}
                             {user.permissions.includes("expenses:delete") && <DeleteExpenseButton expenseId={e.id} />}
                           </div>

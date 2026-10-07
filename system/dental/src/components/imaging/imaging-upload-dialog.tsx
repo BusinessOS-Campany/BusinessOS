@@ -30,7 +30,7 @@ interface Props {
 }
 
 export function ImagingUploadDialog({ trigger, patients, defaultType = "XRAY_PERIAPICAL" }: Props) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [patientId, setPatientId] = useState("")
@@ -42,13 +42,13 @@ export function ImagingUploadDialog({ trigger, patients, defaultType = "XRAY_PER
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!patientId) {
-      setError(locale === "ar" ? "حدد المريض أولاً" : t.common.select)
+      setError(t.dialogs.labSelectPatient)
       return
     }
     const fd = new FormData(e.currentTarget)
     const file = fd.get("file")
     if (!(file instanceof File) || file.size <= 0) {
-      setError(locale === "ar" ? "اختر ملف صورة" : "Select an image file")
+      setError(t.dialogs.imagingSelectFile)
       return
     }
     setError(null)
@@ -60,14 +60,12 @@ export function ImagingUploadDialog({ trigger, patients, defaultType = "XRAY_PER
         setPatientId("")
         setFileName("")
       } else if (res.error === "file_too_large") {
-        setError(locale === "ar" ? "حجم الملف يتجاوز 10 م.ب" : "File exceeds 10 MB")
+        setError(t.dialogs.imagingTooBig)
       } else {
-        setError(locale === "ar" ? "حدث خطأ أثناء الرفع" : t.common.error)
+        setError(t.common.error)
       }
     })
   }
-
-  const ar = locale === "ar"
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -76,7 +74,7 @@ export function ImagingUploadDialog({ trigger, patients, defaultType = "XRAY_PER
         <form onSubmit={onSubmit} className="grid gap-4 py-2">
           <DialogHeader>
             <DialogTitle>{t.imaging.upload}</DialogTitle>
-            <DialogDescription>{ar ? "ارفع صورة أو أشعة خاصة بالمريض" : "Attach an image or X-ray to the patient record"}</DialogDescription>
+            <DialogDescription>{t.dialogs.imagingHint}</DialogDescription>
           </DialogHeader>
 
           <input type="hidden" name="type" value={type} />
@@ -107,7 +105,7 @@ export function ImagingUploadDialog({ trigger, patients, defaultType = "XRAY_PER
                 <SelectContent>
                   {IMAGING_TYPES.map((tp) => (
                     <SelectItem key={tp.value} value={tp.value}>
-                      {ar ? tp.ar : tp.en}
+                      {t.imagingTypes[tp.value] ?? tp.value}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -115,8 +113,8 @@ export function ImagingUploadDialog({ trigger, patients, defaultType = "XRAY_PER
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="img-title">{t.dentalChart.title === "Dental Chart" ? "Title" : "العنوان"}</Label>
-              <Input id="img-title" name="title" placeholder={ar ? "وصف قصير…" : "Short title…"} />
+              <Label htmlFor="img-title">{t.imaging.titleField}</Label>
+              <Input id="img-title" name="title" placeholder={t.dialogs.imagingTitlePh} />
             </div>
 
             <div className="space-y-1.5">

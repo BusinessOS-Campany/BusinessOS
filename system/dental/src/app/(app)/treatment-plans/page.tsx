@@ -1,9 +1,9 @@
 import { requirePermission } from "@/lib/dal"
 import { prisma } from "@/lib/prisma"
-import { cookies } from "next/headers"
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
-import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
+import { statusLabel } from "@/lib/i18n"
 import { statusColor } from "@/lib/status-ui"
 import { formatCurrency, formatDate } from "@/lib/format"
 import { TreatmentPlanFormDialog, type PlanOption, type ProcedureOption } from "@/components/treatment-plans/plan-form-dialog"
@@ -26,8 +26,7 @@ const PER_PAGE = 10
 
 export default async function TreatmentPlansPage({ searchParams }: { searchParams?: SearchParams }) {
   const user = await requirePermission("treatmentPlans:view")
-  const cookieStore = await cookies()
-  const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t, locale } = await getI18n()
   const url: Params = (await searchParams) ?? {}
   const ar = locale === "ar"
   const q = sp(url, "q")?.trim() ?? ""
@@ -107,8 +106,8 @@ export default async function TreatmentPlansPage({ searchParams }: { searchParam
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{ar ? "خطط العلاج" : "Treatment Plans"}</h1>
-          <p className="text-sm text-muted-foreground">{total} {ar ? "خطة" : "plans"}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t.treatmentPlans.title}</h1>
+          <p className="text-sm text-muted-foreground">{t.page.totalPlans.replace("{count}", String(total))}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {user.permissions.includes("treatmentPlans:create") && (
@@ -128,22 +127,22 @@ export default async function TreatmentPlansPage({ searchParams }: { searchParam
       <Card className="overflow-hidden">
         <form method="GET" action="/treatment-plans" className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
           <div className="flex-1">
-            <Input type="search" name="q" defaultValue={q} placeholder={ar ? "بحث بالاسم أو رقم المريض…" : "Search patient…"} className="w-full" />
+            <Input type="search" name="q" defaultValue={q} placeholder={t.page.searchPatient} className="w-full" />
           </div>
           <select
             name="status"
             defaultValue={status}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="">{ar ? "كل الحالات" : "All statuses"}</option>
+            <option value="">{t.ui.allStatuses}</option>
             {["DRAFT", "PROPOSED", "ACCEPTED", "IN_PROGRESS", "PARTIALLY_COMPLETED", "COMPLETED", "REJECTED", "CANCELLED"].map((s) => (
-              <option key={s} value={s}>{s}</option>
+              <option key={s} value={s}>{statusLabel(t, s)}</option>
             ))}
           </select>
-          <Button type="submit" variant="outline">{ar ? "تصفية" : "Filter"}</Button>
+          <Button type="submit" variant="outline">{t.common.filter}</Button>
           {(q || status) && (
             <Button type="button" variant="ghost" asChild>
-              <Link href="/treatment-plans">{ar ? "مسح" : "Clear"}</Link>
+              <Link href="/treatment-plans">{t.common.clear}</Link>
             </Button>
           )}
         </form>
@@ -152,18 +151,18 @@ export default async function TreatmentPlansPage({ searchParams }: { searchParam
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{ar ? "الخطة" : "Plan"}</TableHead>
-                <TableHead>{ar ? "المريض" : "Patient"}</TableHead>
-                <TableHead>{ar ? "الحالة" : "Status"}</TableHead>
-                <TableHead>{ar ? "التكلفة النهائية" : "Final cost"}</TableHead>
-                <TableHead>{ar ? "تاريخ الإنشاء" : "Created"}</TableHead>
-                <TableHead className="text-end">{ar ? "إجراءات" : "Actions"}</TableHead>
+                <TableHead>{t.treatmentPlans.plan}</TableHead>
+                <TableHead>{t.treatmentPlans.patient}</TableHead>
+                <TableHead>{t.treatmentPlans.status}</TableHead>
+                <TableHead>{t.treatmentPlans.finalCost}</TableHead>
+                <TableHead>{t.treatmentPlans.createdAt}</TableHead>
+                <TableHead className="text-end">{t.common.actions}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-16 text-center text-sm text-muted-foreground">{ar ? "لا توجد بيانات" : "No data available"}</TableCell>
+                  <TableCell colSpan={6} className="py-16 text-center text-sm text-muted-foreground">{t.common.noData}</TableCell>
                 </TableRow>
               ) : (
                 rows.map((plan) => {
@@ -173,7 +172,7 @@ export default async function TreatmentPlansPage({ searchParams }: { searchParam
                     <TableRow key={plan.id}>
                       <TableCell>
                         <p className="font-medium">{locale === "ar" ? plan.nameAr : plan.nameEn}</p>
-                        <p className="text-xs text-muted-foreground">{plan.procedures.length} {ar ? "إجراء" : "procedures"}</p>
+                        <p className="text-xs text-muted-foreground">{t.page.proceduresCount.replace("{count}", String(plan.procedures.length))}</p>
                       </TableCell>
                       <TableCell>
                         <Link href={`/patients/${plan.patient.id}`} className="hover:underline">{patientName}</Link>
@@ -181,7 +180,7 @@ export default async function TreatmentPlansPage({ searchParams }: { searchParam
                       </TableCell>
                       <TableCell>
                         <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs" style={{ borderColor: c.border, color: c.text, background: c.bg }}>
-                          {plan.status}
+                          {statusLabel(t, plan.status)}
                         </span>
                       </TableCell>
                       <TableCell className="tabular-nums">{formatCurrency(plan.finalCost)}</TableCell>
@@ -189,7 +188,7 @@ export default async function TreatmentPlansPage({ searchParams }: { searchParam
                       <TableCell className="text-end">
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/treatment-plans/${plan.id}`}>
-                            {ar ? "عرض" : "View"}
+                            {t.common.view}
                             <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" />
                           </Link>
                         </Button>

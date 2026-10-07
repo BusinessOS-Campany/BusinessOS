@@ -88,11 +88,7 @@ export function PatientFormDialog({
           <DialogHeader>
             <DialogTitle>{isEdit ? t.common.edit : t.patients.newPatient}</DialogTitle>
             <DialogDescription>
-              {isEdit
-                ? t.common.update
-                : locale === "ar"
-                ? "أدخل بيانات المريض الجديد"
-                : "Enter new patient details"}
+              {isEdit ? t.common.update : t.dialogs.patientNewHint}
             </DialogDescription>
           </DialogHeader>
 
@@ -134,8 +130,8 @@ export function PatientFormDialog({
                     <SelectValue placeholder={t.common.select} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="MALE">{locale === "ar" ? "ذكر" : "Male"}</SelectItem>
-                    <SelectItem value="FEMALE">{locale === "ar" ? "أنثى" : "Female"}</SelectItem>
+                    <SelectItem value="MALE">{t.patients.male}</SelectItem>
+                    <SelectItem value="FEMALE">{t.patients.female}</SelectItem>
                   </SelectContent>
                 </Select>
                 <input type="hidden" name="gender" value={gender} />

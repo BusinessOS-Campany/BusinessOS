@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { getI18n } from "@/lib/i18n-server"
 
 type Params = { [key: string]: string | string[] | undefined }
 type SearchParams = Promise<Params>
@@ -26,6 +27,7 @@ export default async function InstallmentsPage({ searchParams }: { searchParams?
   const user = await requirePermission("installments:view")
   const cookieStore = await cookies()
   const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t } = await getI18n()
   const ar = locale === "ar"
   const url: Params = (await searchParams) ?? {}
 
@@ -96,8 +98,8 @@ export default async function InstallmentsPage({ searchParams }: { searchParams?
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{ar ? "خطط التقسيط" : "Installment Plans"}</h1>
-          <p className="text-sm text-muted-foreground">{total} {ar ? "خطة" : "plans"}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t.nav.installments}</h1>
+          <p className="text-sm text-muted-foreground">{t.page.totalPlans.replace("{count}", String(total))}</p>
         </div>
         {user.permissions.includes("installments:create") && (
           <InstallmentPlanDialog
@@ -106,7 +108,7 @@ export default async function InstallmentsPage({ searchParams }: { searchParams?
             trigger={
               <Button>
                 <CalendarClock className="h-4 w-4" />
-                {ar ? "خطة سداد جديدة" : "New Payment Plan"}
+                {t.installments.newPlan}
               </Button>
             }
           />
@@ -116,12 +118,12 @@ export default async function InstallmentsPage({ searchParams }: { searchParams?
       <Card className="overflow-hidden">
         <form method="GET" action="/installments" className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
           <div className="flex-1">
-            <Input type="search" name="q" defaultValue={q} placeholder={ar ? "بحث باسم المريض…" : "Search patient…"} className="w-full" />
+            <Input type="search" name="q" defaultValue={q} placeholder={t.page.searchPatient} className="w-full" />
           </div>
-          <Button type="submit" variant="outline">{ar ? "تصفية" : "Filter"}</Button>
+          <Button type="submit" variant="outline">{t.common.filter}</Button>
           {q && (
             <Button type="button" variant="ghost" asChild>
-              <Link href="/installments">{ar ? "مسح" : "Clear"}</Link>
+              <Link href="/installments">{t.common.clear}</Link>
             </Button>
           )}
         </form>
@@ -130,14 +132,14 @@ export default async function InstallmentsPage({ searchParams }: { searchParams?
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{ar ? "المريض" : "Patient"}</TableHead>
-                <TableHead className="text-end">{ar ? "الإجمالي" : "Total"}</TableHead>
-                <TableHead className="text-end">{ar ? "الدفعة الأولى" : "Down"}</TableHead>
-                <TableHead className="text-end">{ar ? "المدفوع" : "Paid"}</TableHead>
-                <TableHead className="text-end">{ar ? "المتبقي" : "Remaining"}</TableHead>
-                <TableHead className="text-center">{ar ? "الأقساط" : "Installments"}</TableHead>
-                <TableHead>{ar ? "أقرب استحقاق" : "Next due"}</TableHead>
-                <TableHead className="text-end">{ar ? "إجراءات" : "Actions"}</TableHead>
+                <TableHead>{t.patients.fullName}</TableHead>
+                <TableHead className="text-end">{t.common.total}</TableHead>
+                <TableHead className="text-end">{t.installments.downPayment}</TableHead>
+                <TableHead className="text-end">{t.billing.paid}</TableHead>
+                <TableHead className="text-end">{t.billing.remaining}</TableHead>
+                <TableHead className="text-center">{t.installments.installments}</TableHead>
+                <TableHead>{t.page.nextDue}</TableHead>
+                <TableHead className="text-end">{t.common.actions}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -163,7 +165,7 @@ export default async function InstallmentsPage({ searchParams }: { searchParams?
                       <TableCell className="whitespace-nowrap">{nextDue ? formatDate(nextDue.dueDate, locale) : "—"}</TableCell>
                       <TableCell className="text-end">
                         <Button variant="outline" size="sm" asChild>
-                          <Link href={`/installments/${plan.id}`}>{ar ? "عرض" : "View"}</Link>
+                          <Link href={`/installments/${plan.id}`}>{t.common.view}</Link>
                         </Button>
                       </TableCell>
                     </TableRow>

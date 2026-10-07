@@ -1,9 +1,8 @@
 import { requirePermission } from "@/lib/dal"
 import { prisma } from "@/lib/prisma"
-import { cookies } from "next/headers"
 import Link from "next/link"
 import { Package, ArrowLeftRight } from "lucide-react"
-import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
 import { statusColor } from "@/lib/status-ui"
 import { formatCurrency, formatDate } from "@/lib/format"
 import { PRODUCT_CATEGORIES, productCategoryLabel, productUnitLabel } from "@/lib/constants/inventory"
@@ -32,8 +31,7 @@ const dec = (v: string | { toString(): string }) => Number(v.toString())
 
 export default async function InventoryPage({ searchParams }: { searchParams?: SearchParams }) {
   const user = await requirePermission("inventory:view")
-  const cookieStore = await cookies()
-  const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t, locale } = await getI18n()
   const ar = locale === "ar"
   const url: Params = (await searchParams) ?? {}
   const today = new Date()
@@ -94,13 +92,13 @@ export default async function InventoryPage({ searchParams }: { searchParams?: S
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{ar ? "المخزون" : "Inventory"}</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t.inventory.title}</h1>
           <p className="text-sm text-muted-foreground">
-            {total} {ar ? "صنف" : "products"}
+            {t.page.totalProducts.replace("{count}", String(total))}
             {lowCount > 0 && (
               <span className="ms-2 inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
                 <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                {lowCount} {ar ? "صنف منخفض المخزون" : "low stock items"}
+                {t.page.lowStockItems.replace("{count}", String(lowCount))}
               </span>
             )}
           </p>
@@ -110,7 +108,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: S
             trigger={
               <Button>
                 <Package className="h-4 w-4" />
-                {ar ? "منتج جديد" : "New Product"}
+                {t.inventory.newProduct}
               </Button>
             }
             suppliers={supplierOptions}
@@ -121,22 +119,22 @@ export default async function InventoryPage({ searchParams }: { searchParams?: S
       <Card className="overflow-hidden">
         <form method="GET" action="/inventory" className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
           <div className="flex-1">
-            <Input type="search" name="q" defaultValue={q} placeholder={ar ? "بحث بالاسم أو الرمز…" : "Search name or SKU…"} className="w-full" />
+            <Input type="search" name="q" defaultValue={q} placeholder={t.page.searchNameSku} className="w-full" />
           </div>
           <select
             name="category"
             defaultValue={category}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="">{ar ? "كل الفئات" : "All categories"}</option>
+            <option value="">{t.ui.allCategories}</option>
             {PRODUCT_CATEGORIES.map((c) => (
               <option key={c} value={c}>{productCategoryLabel(c, locale)}</option>
             ))}
           </select>
-          <Button type="submit" variant="outline">{ar ? "تصفية" : "Filter"}</Button>
+          <Button type="submit" variant="outline">{t.common.filter}</Button>
           {(q || category) && (
             <Button type="button" variant="ghost" asChild>
-              <Link href="/inventory">{ar ? "مسح" : "Clear"}</Link>
+              <Link href="/inventory">{t.common.clear}</Link>
             </Button>
           )}
         </form>
@@ -145,23 +143,23 @@ export default async function InventoryPage({ searchParams }: { searchParams?: S
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{ar ? "الصنف" : "Product"}</TableHead>
-                <TableHead>{ar ? "الرمز" : "SKU"}</TableHead>
-                <TableHead>{ar ? "الفئة" : "Category"}</TableHead>
-                <TableHead>{ar ? "المورد" : "Supplier"}</TableHead>
-                <TableHead className="text-end">{ar ? "الكمية" : "Quantity"}</TableHead>
-                <TableHead className="text-end">{ar ? "التكلفة" : "Cost"}</TableHead>
-                <TableHead className="text-end">{ar ? "سعر البيع" : "Selling price"}</TableHead>
-                <TableHead>{ar ? "الانتهاء" : "Expiration"}</TableHead>
+                <TableHead>{t.inventory.productColumn}</TableHead>
+                <TableHead>{t.inventory.sku}</TableHead>
+                <TableHead>{t.inventory.category}</TableHead>
+                <TableHead>{t.inventory.supplier}</TableHead>
+                <TableHead className="text-end">{t.inventory.quantity}</TableHead>
+                <TableHead className="text-end">{t.inventory.cost}</TableHead>
+                <TableHead className="text-end">{t.inventory.sellingPrice}</TableHead>
+                <TableHead>{t.inventory.expiration}</TableHead>
                 {(user.permissions.includes("inventory:edit") || user.permissions.includes("inventory:delete")) && (
-                  <TableHead className="text-end">{ar ? "إجراءات" : "Actions"}</TableHead>
+                  <TableHead className="text-end">{t.common.actions}</TableHead>
                 )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-16 text-center text-sm text-muted-foreground">{ar ? "لا توجد منتجات" : "No products found"}</TableCell>
+                  <TableCell colSpan={9} className="py-16 text-center text-sm text-muted-foreground">{t.inventory.noData}</TableCell>
                 </TableRow>
               ) : (
                 rows.map((p) => {
@@ -211,7 +209,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: S
                         {low && (
                           <div>
                             <span className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
-                              {ar ? "مخزون منخفض" : "Low stock"}
+                              {t.inventory.lowStock}
                             </span>
                           </div>
                         )}
@@ -233,7 +231,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: S
                                 trigger={
                                   <Button variant="outline" size="sm">
                                     <ArrowLeftRight className="h-3.5 w-3.5" />
-                                    {ar ? "تسوية" : "Adjust"}
+                                    {t.page.adjust}
                                   </Button>
                                 }
                                 productId={p.id}
@@ -242,7 +240,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: S
                               />
                             )}
                             {user.permissions.includes("inventory:edit") && (
-                              <ProductFormDialog existing={lite} suppliers={supplierOptions} trigger={<Button variant="outline" size="sm">{ar ? "تعديل" : "Edit"}</Button>} />
+                              <ProductFormDialog existing={lite} suppliers={supplierOptions} trigger={<Button variant="outline" size="sm">{t.common.edit}</Button>} />
                             )}
                             {user.permissions.includes("inventory:delete") && <DeleteProductButton productId={p.id} />}
                           </div>

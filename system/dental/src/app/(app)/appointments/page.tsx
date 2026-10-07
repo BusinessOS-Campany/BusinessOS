@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { APPOINTMENT_STATUSES } from "@/lib/constants/clinical"
 import { cn } from "@/lib/utils"
+import { getI18n } from "@/lib/i18n-server"
+import { statusLabel } from "@/lib/i18n"
 
 type Params = { [key: string]: string | string[] | undefined }
 type SearchParams = Promise<Params>
@@ -24,6 +26,7 @@ function localDateInput(): string {
 
 export default async function AppointmentsPage({ searchParams }: { searchParams?: SearchParams }) {
   const user = await requirePermission("appointments:view")
+  const { t } = await getI18n()
   const url: Params = (await searchParams) ?? {}
 
   const dateParam = typeof url.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(url.date) ? url.date : localDateInput()
@@ -120,8 +123,10 @@ export default async function AppointmentsPage({ searchParams }: { searchParams?
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Appointments</h1>
-          <p className="text-sm text-muted-foreground">{total} on {dateParam}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t.nav.appointments}</h1>
+          <p className="text-sm text-muted-foreground">
+            {t.page.appointmentsForDate.replace("{count}", String(total)).replace("{date}", dateParam)}
+          </p>
         </div>
         {user.permissions.includes("appointments:create") && (
           <AppointmentFormDialog
@@ -130,7 +135,7 @@ export default async function AppointmentsPage({ searchParams }: { searchParams?
             trigger={
               <span className={cn(buttonVariants(), "inline-flex cursor-pointer")}>
                 <CalendarPlus className="h-4 w-4" />
-                New Appointment
+                {t.appointments.newAppointment}
               </span>
             }
           />
@@ -145,13 +150,13 @@ export default async function AppointmentsPage({ searchParams }: { searchParams?
             defaultValue={status}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-44"
           >
-            <option value="">All statuses</option>
+            <option value="">{t.ui.allStatuses}</option>
             {APPOINTMENT_STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>{s.en}</option>
+              <option key={s.value} value={s.value}>{statusLabel(t, s.value)}</option>
             ))}
           </select>
           <button type="submit" className={buttonVariants({ variant: "outline" })}>
-            Filter
+            {t.common.filter}
           </button>
         </form>
 
@@ -159,12 +164,12 @@ export default async function AppointmentsPage({ searchParams }: { searchParams?
 
         <div className="flex flex-col items-center justify-between gap-3 border-t px-4 py-3 sm:flex-row">
           <p className="text-xs text-muted-foreground">
-            {total === 0 ? 0 : (page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total}
+            {total === 0 ? 0 : (page - 1) * perPage + 1}–{Math.min(page * perPage, total)} {t.common.of} {total}
           </p>
           <div className="flex items-center gap-1">
-            {link(makeHref(page - 1), "Previous", page <= 1)}
-            <span className="px-2 text-sm tabular-nums">Page {page} / {totalPages}</span>
-            {link(makeHref(page + 1), "Next", page >= totalPages)}
+            {link(makeHref(page - 1), t.common.previous, page <= 1)}
+            <span className="px-2 text-sm tabular-nums">{t.common.page} {page} / {totalPages}</span>
+            {link(makeHref(page + 1), t.common.next, page >= totalPages)}
           </div>
         </div>
       </Card>

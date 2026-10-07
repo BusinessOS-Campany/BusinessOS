@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useI18n } from "@/components/lang-provider"
 import { checkInWaitingAction, type CheckInState } from "@/lib/actions/waiting-room"
 import { SEVERITIES } from "@/lib/constants/clinical"
+import { statusLabel } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -38,7 +39,7 @@ interface Props {
 }
 
 export function CheckInDialog({ trigger, options }: Props) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -61,7 +62,7 @@ export function CheckInDialog({ trigger, options }: Props) {
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!patientId) {
-      setError(locale === "ar" ? "حدد المريض أولاً" : t.common.required)
+      setError(t.common.required)
       return
     }
     const formData = new FormData(e.currentTarget)
@@ -77,9 +78,9 @@ export function CheckInDialog({ trigger, options }: Props) {
         setChairId("")
         setPriority("")
       } else if (res.error === "duplicate") {
-        setError(locale === "ar" ? "هذا المريض موجود بالفعل في قائمة الانتظار" : "This patient is already in the waiting queue")
+        setError(t.dialogs.checkInAlreadyQueue)
       } else {
-        setError(locale === "ar" ? "حدث خطأ أثناء الحفظ" : t.common.error)
+        setError(t.common.error)
       }
     })
   }
@@ -92,7 +93,7 @@ export function CheckInDialog({ trigger, options }: Props) {
           <DialogHeader>
             <DialogTitle>{t.waitingRoom.checkIn}</DialogTitle>
             <DialogDescription>
-              {locale === "ar" ? "تسجيل دخول المريض إلى قائمة الانتظار" : "Add a patient to the waiting queue"}
+              {t.dialogs.checkInHint}
             </DialogDescription>
           </DialogHeader>
 
@@ -175,7 +176,7 @@ export function CheckInDialog({ trigger, options }: Props) {
                 <SelectContent>
                   {SEVERITIES.map((s) => (
                     <SelectItem key={s.value} value={s.value}>
-                      {locale === "ar" ? s.ar : s.en}
+                      {statusLabel(t, s.value)}
                     </SelectItem>
                   ))}
                 </SelectContent>

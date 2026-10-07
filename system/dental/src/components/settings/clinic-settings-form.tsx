@@ -25,8 +25,7 @@ export interface ClinicSettings {
 }
 
 export function ClinicSettingsForm({ initial }: { initial: ClinicSettings }) {
-  const { t, locale } = useI18n()
-  const ar = locale === "ar"
+  const { t } = useI18n()
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const router = useRouter()
@@ -43,7 +42,7 @@ export function ClinicSettingsForm({ initial }: { initial: ClinicSettings }) {
         router.refresh()
         setSaved(true)
       } else {
-        setError(ar ? "حدث خطأ أثناء الحفظ" : t.common.error)
+        setError(t.common.error)
       }
     })
   }

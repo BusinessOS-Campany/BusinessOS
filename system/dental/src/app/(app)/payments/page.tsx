@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { getI18n } from "@/lib/i18n-server"
 
 type Params = { [key: string]: string | string[] | undefined }
 type SearchParams = Promise<Params>
@@ -29,6 +30,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams?: Se
   const user = await requirePermission("payments:view")
   const cookieStore = await cookies()
   const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t } = await getI18n()
   const ar = locale === "ar"
   const url: Params = (await searchParams) ?? {}
 
@@ -101,8 +103,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams?: Se
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{ar ? "المدفوعات" : "Payments"}</h1>
-          <p className="text-sm text-muted-foreground">{total} {ar ? "دفعة" : "payments"}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t.nav.payments}</h1>
+          <p className="text-sm text-muted-foreground">{t.page.totalPayments.replace("{count}", String(total))}</p>
         </div>
         {user.permissions.includes("payments:create") && (
           <PaymentFormDialog
@@ -111,7 +113,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams?: Se
             trigger={
               <Button>
                 <Banknote className="h-4 w-4" />
-                {ar ? "تسجيل دفعة" : "Record Payment"}
+                {t.payments.newPayment}
               </Button>
             }
           />
@@ -121,33 +123,33 @@ export default async function PaymentsPage({ searchParams }: { searchParams?: Se
       <Card className="overflow-hidden">
         <form method="GET" action="/payments" className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
           <div className="flex-1">
-            <Input type="search" name="q" defaultValue={q} placeholder={ar ? "بحث باسم المريض…" : "Search patient…"} className="w-full" />
+            <Input type="search" name="q" defaultValue={q} placeholder={t.page.searchPatient} className="w-full" />
           </div>
           <select
             name="method"
             defaultValue={method}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="">{ar ? "كل الطرق" : "All methods"}</option>
+            <option value="">{t.ui.allMethods}</option>
             {PAYMENT_METHODS.map((m) => (
               <option key={m} value={m}>{paymentMethodLabel(m, locale)}</option>
             ))}
           </select>
-          <Button type="submit" variant="outline">{ar ? "تصفية" : "Filter"}</Button>
+          <Button type="submit" variant="outline">{t.common.filter}</Button>
         </form>
 
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{ar ? "التاريخ" : "Date"}</TableHead>
-                <TableHead>{ar ? "المريض" : "Patient"}</TableHead>
-                <TableHead>{ar ? "الفاتورة" : "Invoice"}</TableHead>
-                <TableHead className="text-end">{ar ? "المبلغ" : "Amount"}</TableHead>
-                <TableHead>{ar ? "الطريقة" : "Method"}</TableHead>
-                <TableHead>{ar ? "المرجع" : "Reference"}</TableHead>
-                <TableHead>{ar ? "استلمها" : "Received by"}</TableHead>
-                {user.permissions.includes("payments:refund") && <TableHead className="text-end">{ar ? "إجراءات" : "Actions"}</TableHead>}
+                <TableHead>{t.common.date}</TableHead>
+                <TableHead>{t.patients.fullName}</TableHead>
+                <TableHead>{t.billing.invoice}</TableHead>
+                <TableHead className="text-end">{t.common.amount}</TableHead>
+                <TableHead>{t.payments.method}</TableHead>
+                <TableHead>{t.billing.reference}</TableHead>
+                <TableHead>{t.billing.receivedBy}</TableHead>
+                {user.permissions.includes("payments:refund") && <TableHead className="text-end">{t.common.actions}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
