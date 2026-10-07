@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
-  Clock,
   LayoutGrid,
   Loader2,
   Search,
@@ -19,25 +18,20 @@ import {
   CATEGORY_MAP,
   SYSTEM_CATEGORIES,
   type BusinessSystem,
-  type SystemStatus,
 } from "@/core/demo/business-systems-data";
 import { revealDelay, spotlightFromEvent, useScrollReveal } from "@/components/demo/use-scroll-reveal";
+import { dictionaries, t, type Dictionary, type Locale } from "@/core/i18n/dictionaries";
 
 type SortKey = "recommended" | "az" | "za" | "category" | "available" | "coming";
 
-const SORT_OPTIONS: { value: SortKey; labelAr: string; labelEn: string }[] = [
-  { value: "recommended", labelAr: "موصى به", labelEn: "Recommended" },
-  { value: "az", labelAr: "أ – ي", labelEn: "A–Z" },
-  { value: "za", labelAr: "ي – أ", labelEn: "Z–A" },
-  { value: "category", labelAr: "حسب الفئة", labelEn: "Category" },
-  { value: "available", labelAr: "المتاح أولاً", labelEn: "Available first" },
-  { value: "coming", labelAr: "القادم أولاً", labelEn: "Coming first" },
+const SORT_KEYS: { value: SortKey; key: string }[] = [
+  { value: "recommended", key: "sortRecommended" },
+  { value: "az", key: "sortAz" },
+  { value: "za", key: "sortZa" },
+  { value: "category", key: "sortCategory" },
+  { value: "available", key: "sortAvailable" },
+  { value: "coming", key: "sortComing" },
 ];
-
-const STATUS_META: Record<SystemStatus, { labelAr: string; live: boolean }> = {
-  available: { labelAr: "متاح الآن", live: true },
-  coming_soon: { labelAr: "قريباً", live: false },
-};
 
 /** Arabic-tolerant normalization so search matches with/without hamza/diacritics. */
 function normalize(text: string): string {
@@ -51,6 +45,14 @@ function normalize(text: string): string {
     .trim();
 }
 
+function pickName(system: BusinessSystem, locale: Locale): string {
+  return locale === "ar" ? system.nameAr : system.nameEn;
+}
+
+function pickDesc(system: BusinessSystem, locale: Locale): string {
+  return locale === "ar" ? system.descAr : system.descEn;
+}
+
 function matches(system: BusinessSystem, query: string): boolean {
   if (!query) return true;
   const category = CATEGORY_MAP.get(system.category);
@@ -60,9 +62,10 @@ function matches(system: BusinessSystem, query: string): boolean {
   return query.split(/\s+/).every((token) => haystack.includes(token));
 }
 
-function sortSystems(systems: BusinessSystem[], sort: SortKey): BusinessSystem[] {
+function sortSystems(systems: BusinessSystem[], sort: SortKey, locale: Locale): BusinessSystem[] {
   const rank = (s: BusinessSystem) => (s.status === "available" ? 0 : 1);
-  const byName = (a: BusinessSystem, b: BusinessSystem) => a.nameAr.localeCompare(b.nameAr, "ar");
+  const byName = (a: BusinessSystem, b: BusinessSystem) =>
+    pickName(a, locale).localeCompare(pickName(b, locale), locale);
   const byCategory = (a: BusinessSystem, b: BusinessSystem) => {
     const order = SYSTEM_CATEGORIES.findIndex((c) => c.id === a.category) - SYSTEM_CATEGORIES.findIndex((c) => c.id === b.category);
     return order !== 0 ? order : byName(a, b);
@@ -99,8 +102,13 @@ export type SystemCardState =
  * route, whereas on /systems a card the deployment can actually serve files a
  * platform-approval request. Everything visual is shared, so the two pages can
  * never drift apart.
+ *
+ * Strings come from `platform.systems.*` and are localized when the caller
+ * passes `dict`/`locale` (the /systems page does, from the request cookie). The
+ * public /demo page is a client component outside the dictionary shell, so it
+ * omits them and keeps rendering Arabic — the same behaviour it had before.
  */
-export function BusinessSystemsSection({ states }: {
+export function BusinessSystemsSection({ states, dict, locale }: {
   /**
    * Per-card state, keyed by `BUSINESS_SYSTEMS[].id`. Empty/absent renders every
    * card as a coming-soon showcase, which is what /demo and every signed-out
@@ -111,13 +119,20 @@ export function BusinessSystemsSection({ states }: {
    * for a collection type the wire format cannot carry.
    */
   states?: Readonly<Record<string, SystemCardState>>;
+  /** Platform dictionary from `getDictAndDir()`; omitted on /demo (Arabic). */
+  dict?: Dictionary;
+  /** Active locale; omitted on /demo (Arabic). */
+  locale?: Locale;
 }) {
+  const lang: Locale = locale ?? "ar";
+  const d = useCallback((key: string) => t(dict ?? dictionaries.ar, `platform.catalog.${key}`), [dict]);
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("all");
   const [sort, setSort] = useState<SortKey>("recommended");
   // A card that was just requested flips to "pending" here, so the badge updates
   // without a round trip that would lose the visitor's scroll and filters.
-const [requested, setRequested] = useState<Record<string, SystemCardState>>({});
+  const [requested, setRequested] = useState<Record<string, SystemCardState>>({});
   const cardState = useCallback((id: string) => requested[id] ?? states?.[id], [requested, states]);
   const revealRef = useScrollReveal<HTMLElement>();
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -149,16 +164,16 @@ const [requested, setRequested] = useState<Record<string, SystemCardState>>({});
 
   const filtered = useMemo(() => {
     const inCategory = category === "all" ? BUSINESS_SYSTEMS : BUSINESS_SYSTEMS.filter((s) => s.category === category);
-    return sortSystems(inCategory.filter((s) => matches(s, normalizedQuery)), sort);
-  }, [category, normalizedQuery, sort]);
+    return sortSystems(inCategory.filter((s) => matches(s, normalizedQuery)), sort, lang);
+  }, [category, normalizedQuery, sort, lang]);
 
   const grouped = useMemo(() => {
     if (normalizedQuery || category !== "all" || (sort !== "recommended" && sort !== "category")) return null;
     return SYSTEM_CATEGORIES.map((c) => ({
       category: c,
-      systems: sortSystems(BUSINESS_SYSTEMS.filter((s) => s.category === c.id), sort),
+      systems: sortSystems(BUSINESS_SYSTEMS.filter((s) => s.category === c.id), sort, lang),
     }));
-  }, [normalizedQuery, category, sort]);
+  }, [normalizedQuery, category, sort, lang]);
 
   const reset = () => {
     setQuery("");
@@ -169,7 +184,7 @@ const [requested, setRequested] = useState<Record<string, SystemCardState>>({});
   return (
     <section
       ref={revealRef}
-      aria-label="حلول الأعمال"
+      aria-label={d("aria")}
       className="mt-14"
       onPointerMove={spotlightFromEvent}
     >
@@ -185,7 +200,7 @@ const [requested, setRequested] = useState<Record<string, SystemCardState>>({});
       >
       {/* Search */}
       <div className="mx-auto max-w-2xl">
-        <label htmlFor="business-systems-search" className="sr-only">ابحث عن الأنظمة</label>
+        <label htmlFor="business-systems-search" className="sr-only">{d("searchLabel")}</label>
         <div className="relative">
           <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/40" />
           <input
@@ -193,7 +208,7 @@ const [requested, setRequested] = useState<Record<string, SystemCardState>>({});
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="ابحث عن الأنظمة… جرّب: طبي، مطعم، محاسبة، medical"
+            placeholder={d("searchPlaceholder")}
             autoComplete="off"
             className="w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] py-3.5 pe-11 ps-12 text-sm text-white placeholder:text-white/35 backdrop-blur-xl transition-all outline-none focus:border-primary/60 focus:bg-primary/[0.06] focus:ring-2 focus:ring-primary/20"
           />
@@ -201,7 +216,7 @@ const [requested, setRequested] = useState<Record<string, SystemCardState>>({});
             <button
               type="button"
               onClick={() => setQuery("")}
-              aria-label="مسح البحث"
+              aria-label={d("clearSearch")}
               className="absolute end-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white"
             >
               <X className="h-4 w-4" />
@@ -212,15 +227,15 @@ const [requested, setRequested] = useState<Record<string, SystemCardState>>({});
 
       {/* Category filter pills. Left full-bleed on purpose: 20 categories need
           the whole container width to stay a mostly-horizontal strip. */}
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-2" role="group" aria-label="تصفية حسب الفئة">
-        <FilterPill active={category === "all"} onClick={() => setCategory("all")} icon={<LayoutGrid className="h-4 w-4" />} label="الكل" count={BUSINESS_SYSTEMS.length} />
+      <div className="mt-3 flex gap-2 overflow-x-auto pb-2" role="group" aria-label={d("categoryFilter")}>
+        <FilterPill active={category === "all"} onClick={() => setCategory("all")} icon={<LayoutGrid className="h-4 w-4" />} label={d("all")} count={BUSINESS_SYSTEMS.length} />
         {SYSTEM_CATEGORIES.map((c) => (
           <FilterPill
             key={c.id}
             active={category === c.id}
             onClick={() => setCategory(category === c.id ? "all" : c.id)}
             icon={<c.icon className="h-4 w-4" />}
-            label={c.nameAr}
+            label={lang === "ar" ? c.nameAr : c.nameEn}
             count={BUSINESS_SYSTEMS.filter((s) => s.category === c.id).length}
           />
         ))}
@@ -232,20 +247,22 @@ const [requested, setRequested] = useState<Record<string, SystemCardState>>({});
         <p className="text-sm text-white/50" role="status">
           {/* Re-keyed so the count cross-fades whenever the result set changes. */}
           <span key={`${filtered.length}-${category}-${sort}`} className="inline-block animate-fade-in">
-            {filtered.length === 0 ? "لا توجد نتائج مطابقة" : `عرض ${filtered.length} من ${BUSINESS_SYSTEMS.length} نظاماً`}
+            {filtered.length === 0
+              ? d("noResults")
+              : d("showing").replace("{shown}", String(filtered.length)).replace("{total}", String(BUSINESS_SYSTEMS.length))}
           </span>
         </p>
         <label className="inline-flex items-center gap-2 text-sm text-white/60">
-          ترتيب:
+          {d("sortLabel")}
           <span className="relative inline-flex items-center">
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
-              aria-label="ترتيب الأنظمة"
+              aria-label={d("sortAria")}
               className="appearance-none rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pe-9 ps-3 text-sm text-white backdrop-blur-xl outline-none transition-all focus:border-primary/60 [&>option]:bg-[#0b0b1e]"
             >
-              {SORT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.labelAr}</option>
+              {SORT_KEYS.map((o) => (
+                <option key={o.value} value={o.value}>{d(o.key)}</option>
               ))}
             </select>
             <ChevronDown className="pointer-events-none absolute end-2.5 h-4 w-4 text-white/40" />
@@ -259,14 +276,14 @@ const [requested, setRequested] = useState<Record<string, SystemCardState>>({});
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
             <SearchX className="h-7 w-7" />
           </div>
-          <p className="text-lg font-bold text-white">لا توجد أنظمة مطابقة لبحثك</p>
-          <p className="text-sm text-white/50">جرّب كلمة مختلفة أو تصفح جميع الفئات.</p>
+          <p className="text-lg font-bold text-white">{d("emptyTitle")}</p>
+          <p className="text-sm text-white/50">{d("emptyHint")}</p>
           <button
             type="button"
             onClick={reset}
             className="mt-2 rounded-xl border border-primary/50 bg-primary/10 px-5 py-2.5 text-sm font-semibold text-primary transition-all hover:bg-primary hover:text-white"
           >
-            عرض كل الأنظمة
+            {d("showAll")}
           </button>
         </div>
       ) : grouped ? (
@@ -278,10 +295,13 @@ const [requested, setRequested] = useState<Record<string, SystemCardState>>({});
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="text-xl font-bold text-white">
-                  {c.nameAr}
+                  {lang === "ar" ? c.nameAr : c.nameEn}
                   <span className="ms-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-xs font-semibold text-white/60">{systems.length}</span>
                 </h3>
-                <p className="text-sm text-white/50">{c.descAr} <span dir="ltr" className="text-white/35">· {c.nameEn}</span></p>
+                <p className="text-sm text-white/50">
+                  {lang === "ar" ? c.descAr : c.descEn}
+                  <span dir="ltr" className="text-white/35"> · {lang === "ar" ? c.nameEn : c.nameAr}</span>
+                </p>
                 <span className="demo-underline mt-2 opacity-70" />
               </div>
             </div>
@@ -291,8 +311,18 @@ const [requested, setRequested] = useState<Record<string, SystemCardState>>({});
                   key={s.id}
                   system={s}
                   index={i}
+                  locale={lang}
+                  d={d}
                   installState={cardState(s.id)}
                   onRequested={(next) => setRequested((prev) => ({ ...prev, [s.id]: next }))}
+                  onWithdrawn={() => {
+                    setRequested((prev) => {
+                      const next = { ...prev };
+                      delete next[s.id];
+                      return next;
+                    });
+                    router.refresh();
+                  }}
                 />
               ))}
             </div>
@@ -305,9 +335,19 @@ const [requested, setRequested] = useState<Record<string, SystemCardState>>({});
               key={s.id}
               system={s}
               index={i}
+              locale={lang}
+              d={d}
               showCategory
               installState={cardState(s.id)}
               onRequested={(next) => setRequested((prev) => ({ ...prev, [s.id]: next }))}
+              onWithdrawn={() => {
+                setRequested((prev) => {
+                  const next = { ...prev };
+                  delete next[s.id];
+                  return next;
+                });
+                router.refresh();
+              }}
             />
           ))}
         </div>
@@ -343,6 +383,8 @@ function FilterPill({ active, onClick, icon, label, count }: { active: boolean; 
  * and writes the audit log. It never installs instantly — an admin approves at
  * `/platform-admin/approvals`, which is what creates the `organizationApp` row
  * the profile's systems tab then reads.
+ *
+ * A `DELETE` to the same URL withdraws the pending request.
  */
 async function requestSystem(slug: string): Promise<SystemCardState> {
   const res = await fetch(`/api/v1/apps/${encodeURIComponent(slug)}/request`, {
@@ -360,36 +402,55 @@ async function requestSystem(slug: string): Promise<SystemCardState> {
   return { state: "pending" };
 }
 
+async function withdrawSystem(slug: string): Promise<void> {
+  const res = await fetch(`/api/v1/apps/${encodeURIComponent(slug)}/request`, { method: "DELETE" });
+  if (!res.ok) throw new Error("WITHDRAW_FAILED");
+}
+
 function BusinessSystemCard({
   system,
   showCategory = false,
   index = 0,
+  locale,
+  d,
   installState,
   onRequested,
+  onWithdrawn,
 }: {
   system: BusinessSystem;
   showCategory?: boolean;
   index?: number;
+  locale: Locale;
+  d: (key: string) => string;
   /** Undefined on /demo and for every card this deployment cannot serve. */
   installState?: SystemCardState;
   onRequested?: (next: SystemCardState) => void;
+  onWithdrawn?: () => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [withdrawFailed, setWithdrawFailed] = useState(false);
+
+  const name = pickName(system, locale);
+  const description = pickDesc(system, locale);
 
   // An installable card is live regardless of the curated catalog's own status:
   // the roadmap marks almost everything "coming soon", but this one the platform
   // confirmed it can serve and approve.
   const installable = installState?.state === "installable";
-  const meta = installable ? STATUS_META.available : STATUS_META[system.status];
+  const metaLive = installable || system.status === "available";
+  const statusLabel = metaLive ? d("statusAvailable") : d("statusComing");
   const category = CATEGORY_MAP.get(system.category);
-  const actionLabel = system.status === "available" ? "افتح النظام" : "ابدأ نسختك";
+  const categoryName = category ? (locale === "ar" ? category.nameAr : category.nameEn) : "";
+  const actionLabel = system.status === "available" ? d("openSystem") : d("startYours");
 
   const submit = async () => {
     if (busy) return;
     setBusy(true);
     setFailed(false);
+    setWithdrawFailed(false);
     try {
       const next = await requestSystem(system.id);
       onRequested?.(next);
@@ -403,45 +464,62 @@ function BusinessSystemCard({
     }
   };
 
+  const withdraw = async () => {
+    if (withdrawing) return;
+    setWithdrawing(true);
+    setWithdrawFailed(false);
+    try {
+      await withdrawSystem(system.id);
+      onWithdrawn?.();
+    } catch {
+      setWithdrawFailed(true);
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
   /** Footer badge + label for the state, so every branch reads the same. */
   const action = (() => {
     if (busy) {
       return (
         <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
           <Loader2 className="h-4 w-4 animate-spin" />
-          جارٍ إرسال الطلب…
+          {d("opening")}
         </span>
       );
     }
-    if (failed) {
-      return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-300">تعذّر إرسال الطلب</span>;
+    if (withdrawing) {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-300">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {d("withdrawing")}
+        </span>
+      );
+    }
+    if (failed || withdrawFailed) {
+      return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-300">{withdrawFailed ? d("withdrawFailed") : d("requestFailed")}</span>;
     }
     switch (installState?.state) {
       case "installed":
-        return (
-          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-300">
-            <Check className="h-4 w-4" />
-            افتح النظام
-          </span>
-        );
+        return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-300"><Check className="h-4 w-4" />{d("openSystem")}</span>;
       case "pending":
         return (
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-300">
-            <Clock className="h-4 w-4" />
-            بانتظار الموافقة
+            <X className="h-4 w-4" />
+            {d("withdraw")}
           </span>
         );
       case "installable":
         return (
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
-            ثبّت الآن
+            {d("installNow")}
             <ArrowLeft className="h-4 w-4 transition-transform duration-300 group-hover:-translate-x-1 rtl:rotate-180" />
           </span>
         );
       default:
         return (
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
-            {system.status === "available" ? "استكشف" : "قريباً"}
+            {system.status === "available" ? d("explore") : d("comingSoon")}
             <ArrowLeft className="h-4 w-4 transition-transform duration-300 group-hover:-translate-x-1 rtl:rotate-180" />
           </span>
         );
@@ -460,29 +538,29 @@ function BusinessSystemCard({
               ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
               : installState?.state === "pending"
                 ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
-                : meta.live
+                : metaLive
                   ? "border-primary/40 bg-primary/10 text-primary"
                   : "border-white/10 bg-white/[0.04] text-white/45"
           }`}
         >
           {installState?.state === "installed" ? (
-            "مثبّت"
+            d("installed")
           ) : installState?.state === "pending" ? (
-            "قيد الموافقة"
+            d("pending")
           ) : (
             <>
-              {meta.live && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />}
-              {meta.labelAr}
+              {metaLive && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />}
+              {statusLabel}
             </>
           )}
         </span>
       </div>
-      <h4 className="text-base leading-snug font-bold text-white">{system.nameAr}</h4>
-      <p dir="ltr" className="mt-0.5 truncate text-right text-xs text-white/35">{system.nameEn}</p>
-      <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-relaxed text-white/60">{system.descAr}</p>
+      <h4 className="text-base leading-snug font-bold text-white">{name}</h4>
+      <p dir="ltr" className="mt-0.5 truncate text-right text-xs text-white/35">{locale === "ar" ? system.nameEn : system.nameAr}</p>
+      <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-relaxed text-white/60">{description}</p>
       <div className="mt-4 flex items-center justify-between border-t border-white/[0.06] pt-3">
         <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium text-white/55">
-          {showCategory ? category?.nameAr : actionLabel}
+          {showCategory ? categoryName : actionLabel}
         </span>
         {action}
       </div>
@@ -507,14 +585,14 @@ function BusinessSystemCard({
     return installState.route ? (
       <Link
         href={installState.route}
-        aria-label={`${system.nameAr} — مثبّت، افتح النظام`}
+        aria-label={`${name} — ${d("ariaInstalledOpen")}`}
         className={className}
         {...motion}
       >
         {inner}
       </Link>
     ) : (
-      <div aria-label={`${system.nameAr} — مثبّت`} className={className} {...motion}>
+      <div aria-label={`${name} — ${d("ariaInstalled")}`} className={className} {...motion}>
         {inner}
       </div>
     );
@@ -526,7 +604,7 @@ function BusinessSystemCard({
         type="button"
         onClick={() => void submit()}
         disabled={busy}
-        aria-label={`${system.nameAr} — ثبّت النظام`}
+        aria-label={`${name} — ${d("ariaInstall")}`}
         aria-busy={busy}
         className={`${className} disabled:cursor-progress disabled:opacity-70`}
         {...motion}
@@ -536,12 +614,28 @@ function BusinessSystemCard({
     );
   }
 
+  if (installState?.state === "pending") {
+    return (
+      <button
+        type="button"
+        onClick={() => void withdraw()}
+        disabled={withdrawing}
+        aria-label={`${name} — ${d("ariaPending")}, ${d("withdraw")}`}
+        aria-busy={withdrawing}
+        className={`${className} disabled:cursor-progress disabled:opacity-70`}
+        {...motion}
+      >
+        {inner}
+      </button>
+    );
+  }
+
   return system.status === "available" && system.route ? (
-    <a href={system.route} target="_blank" rel="noopener noreferrer" aria-label={`${system.nameAr} — افتح النظام`} className={className} {...motion}>
+    <a href={system.route} target="_blank" rel="noopener noreferrer" aria-label={`${name} — ${d("ariaOpen")}`} className={className} {...motion}>
       {inner}
     </a>
   ) : (
-    <Link href="/signup" aria-label={`${system.nameAr} — ${meta.labelAr}، ابدأ نسختك`} className={className} {...motion}>
+    <Link href="/signup" aria-label={`${name} — ${d("ariaComingSoon")}, ${d("ariaStart")}`} className={className} {...motion}>
       {inner}
     </Link>
   );

@@ -28,7 +28,7 @@ Categories covered: signup/verify, sync, self/me, search (tenant-scoped), organs
 | 5 | HIGH | `app/page.tsx` read `me.org.name` which doesn't exist (me returns `organizations[]` + `activeTenant`) | **FIXED** |
 | 6 | MEDIUM | `apps/[slug]/status` route `request.json()` throws on malformed body → 500 | **FIXED** (`.catch(() => null)`) |
 | 7 | MEDIUM | Sama-center `settings` + `reports` pages call routes that never existed | **FIXED** (created, org-settings tag `samaCenter` + dashboard summaries) |
-| 8 | LOW | Marketplace: single-app install is instant (`active`) vs template install queues `pending` | **DOCUMENTED** — deliberate product difference, left as-is |
+| 8 | LOW | Marketplace: single-app install is instant (`active`) vs template install queues `pending` | **SUPERSEDED** — the instant tenant path was removed; a tenant install now always queues for admin approval, and only `/platform-admin/approvals` runs `installSystemForOrg` |
 | 9 | CHECK | `sama-center/dashboard` route BigInt totals must stay `Number` via `toJsonSafe` | PASS (checked `ok()` serialization path) |
 | 10 | HIGH | `createCategory` cycle guard always fired for any child category (`detectCycle(parentId, parentId)` — visited set seeded with the parent → self-hit) → **all nested category creates 500 with "Category cycle detected"** | **FIXED** (removed impossible create-time check; update-path guard `parentId === id` + ancestor walk retained and regression-tested) |
 

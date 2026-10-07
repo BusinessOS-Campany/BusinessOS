@@ -4,6 +4,7 @@ import { requirePlatformAdmin } from "@/core/platform/gate";
 import { prisma } from "@/core/db/client";
 import { writeAuditLog } from "@/core/audit/service";
 import { installSystemForOrg } from "@/core/apps/service";
+import { warmOrgRuntime } from "@/core/systems/runtime/warm";
 
 const decideBody = z.object({
   action: z.enum(["approve", "reject"]),
@@ -85,6 +86,18 @@ export const POST = withRoute(
       slug: req.app.slug,
       userId: admin.id,
     });
+
+    // Warm the org's runtime now instead of on the customer's first open, so
+    // that visit is already served. Deliberately not awaited: a build takes
+    // minutes and the approval must not. A failure is recorded where the
+    // install-status endpoint can report it, not swallowed.
+    if (installed.state !== "pending") {
+      void warmOrgRuntime({
+        orgId: req.organizationId,
+        orgSlug: req.organization.slug,
+        systemSlug: req.app.slug,
+      });
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.organizationAppRequest.update({

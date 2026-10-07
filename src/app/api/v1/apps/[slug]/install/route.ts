@@ -4,6 +4,7 @@ import { requirePermission } from "@/core/db/tenant-guard";
 import { orgSystemNeedsBuild, requestSystemForTenant } from "@/core/apps/service";
 import { openRouteForOrgSlug } from "@/core/systems/catalog";
 import { listSystemSources } from "@/core/org-vault/system-sources";
+import { readOrgSystemBootError } from "@/core/systems/runtime/warm";
 import { prisma } from "@/core/db/client";
 import { ApiError } from "@/core/http/api";
 
@@ -80,9 +81,19 @@ export const GET = withRoute<{ params: Promise<{ slug: string }> }>(
       select: { slug: true },
     });
 
+    // A warm boot that failed leaves a marker; report it as a terminal `failed`
+    // state so the waiting card stops spinning and says why. Cleared by the next
+    // successful boot, so this never becomes a permanent lie.
+    const bootError = org ? readOrgSystemBootError(org.slug, slug) : null;
+
     return ok({
-      state: orgSystemNeedsBuild(org?.slug ?? "", slug) ? "preparing" : "installed",
+      state: bootError
+        ? "failed"
+        : orgSystemNeedsBuild(org?.slug ?? "", slug)
+          ? "preparing"
+          : "installed",
       route: openRouteForOrgSlug(slug, org?.slug, listSystemSources()),
+      error: bootError?.message ?? null,
     });
   },
 );

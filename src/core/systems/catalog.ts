@@ -156,8 +156,18 @@ export function installState(input: {
   soon?: boolean;
   /** Installed, but the org's own copy has not been built yet. */
   needsBuild?: boolean;
+  /**
+   * Installed, but the deployment no longer has a `system/<slug>/` source to
+   * serve or rebuild it from. The install cannot be reproduced, so the card must
+   * not claim it is openable.
+   */
+  sourceMissing?: boolean;
 }): InstallState {
   if (!input.appIsActive) return "unavailable";
+  // An install whose source was removed is not servable: `/{org}/{system}`
+  // answers 404 because that route checks `listSystemSources()`. Saying
+  // "installed" would offer an Open that cannot work, so it reads "unavailable".
+  if (input.installed && input.sourceMissing) return "unavailable";
   // `preparing` is checked before `installed` because it *is* installed — it
   // just is not runnable yet, and the card must not offer "Open" for a folder
   // with no build in it.
@@ -166,6 +176,22 @@ export function installState(input: {
   if (input.hasPendingRequest) return "pending";
   if (input.isDemo) return "demo";
   return "installable";
+}
+
+/**
+ * Installed slugs whose `system/<slug>/` source no longer exists.
+ *
+ * The install gate reads the source at request time, so deleting a source
+ * silently strands every org that installed it: their clone keeps sitting on
+ * disk but `/{org}/{system}` starts answering 404, and nothing says why. Pure so
+ * the divergence can be reported (and tested) without a DB or a filesystem.
+ */
+export function orphanedInstalledSlugs(
+  installedSlugs: readonly string[],
+  sourceSlugs: readonly string[],
+): string[] {
+  const sourced = new Set(sourceSlugs);
+  return [...new Set(installedSlugs)].filter((slug) => !sourced.has(slug)).sort();
 }
 
 /**

@@ -7,6 +7,7 @@ import { writeAuditLog } from "@/core/audit/service";
 import {
   cloneInstalledSystemByRow,
   setOrgSystemDisplayName,
+  uninstallSystemForOrg,
 } from "@/core/apps/service";
 import { getProfileOverview, requireProfileSession } from "@/core/profile/service";
 import { confirmCredentialForOrg } from "@/core/systems/credentials";
@@ -17,6 +18,7 @@ import { confirmCredentialForOrg } from "@/core/systems/credentials";
  *   PATCH  /api/v1/profile/systems   rename one installed system
  *   POST   /api/v1/profile/systems   re-clone the system's files into this org
  *   PUT    /api/v1/profile/systems   activate direct sign-in for one system
+ *   DELETE /api/v1/profile/systems   uninstall a system (stop runtime + drop the row)
  *
  * The rename is stored on the `organizationApp` row, never the `app` catalog
  * row: one customer naming its copy "البيانات الشخصية" must not rename the
@@ -99,6 +101,51 @@ export const POST = withRoute(
     return ok(result);
   },
 );
+
+const uninstallSchema = z.object({ appId: z.string().min(1).max(64) }).strict();
+
+/**
+ * DELETE /api/v1/profile/systems — remove one installed system from this org.
+ *
+ * Stops the org's runtime for the system, then removes the `organizationApp`
+ * row, so the card returns to "installable" and the queued system can be
+ * requested again. The cloned files and the org's private database are kept —
+ * this is not a data wipe — and the response says so explicitly. Gated on
+ * `systems:manage` like every other mutation on this tab, and the `appId` is
+ * looked up inside the active org, so a foreign id 404s rather than reaching
+ * another tenant's install.
+ */
+export const DELETE = withRoute("v1.profile.systems.uninstall", async (request) => {
+  const ctx = await requireTenantContext(request);
+  requirePermission(ctx.tenant, { systems: ["manage"] });
+
+  const body = uninstallSchema.parse(await request.json().catch(() => null));
+
+  const before = await prisma.organizationApp.findUnique({
+    where: { organizationId_appId: { organizationId: ctx.tenant.organizationId, appId: body.appId } },
+    select: { id: true, app: { select: { slug: true } } },
+  });
+  if (!before) throw ApiError.notFound("System is not installed in this organization");
+
+  const result = await uninstallSystemForOrg(ctx.tenant.organizationId, before.app.slug);
+
+  await writeAuditLog(prisma, { organizationId: ctx.tenant.organizationId, userId: ctx.tenant.userId }, {
+    action: "profile.system.uninstalled",
+    entityType: "organizationApp",
+    entityId: before.id,
+    after: {
+      appSlug: before.app.slug,
+      stopped: result.stopped,
+      filesKept: result.filesKept,
+      databaseKept: result.databaseKept,
+    },
+  });
+
+  return ok({
+    uninstalled: { appSlug: before.app.slug, ...result },
+    profile: await getProfileOverview(await requireProfileSession(request.headers)),
+  });
+});
 
 const confirmCredentialSchema = z
   .object({

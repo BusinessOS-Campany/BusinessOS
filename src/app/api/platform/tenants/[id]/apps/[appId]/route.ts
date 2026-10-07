@@ -2,10 +2,14 @@ import { ApiError, ok, withRoute } from "@/core/http/api";
 import { requirePlatformAdmin } from "@/core/platform/gate";
 import { prisma } from "@/core/db/client";
 import { writeAuditLog } from "@/core/audit/service";
+import { stopOrgRuntime } from "@/core/systems/runtime/supervisor";
 
 /**
  * Revoke an app from a tenant: access is removed but the row (and any app
  * data) is kept so re-granting later is cheap and auditable.
+ *
+ * The org's Node process for the system is stopped first, so a revoked system
+ * cannot keep serving from a runtime nobody owns any more.
  */
 export const DELETE = withRoute(
   "platform.tenants.apps.revoke",
@@ -15,9 +19,11 @@ export const DELETE = withRoute(
 
     const orgApp = await prisma.organizationApp.findUnique({
       where: { organizationId_appId: { organizationId: id, appId } },
-      include: { app: { select: { slug: true } } },
+      include: { app: { select: { slug: true } }, organization: { select: { slug: true } } },
     });
     if (!orgApp) throw ApiError.notFound("App is not installed on this tenant");
+
+    const stopped = stopOrgRuntime(orgApp.organization.slug, orgApp.app.slug);
 
     const updated = await prisma.$transaction(async (tx) => {
       const row = await tx.organizationApp.update({
@@ -29,7 +35,7 @@ export const DELETE = withRoute(
         entityType: "organizationApp",
         entityId: row.id,
         before: { appSlug: orgApp.app.slug, status: orgApp.status },
-        after: { appSlug: orgApp.app.slug, status: "disabled" },
+        after: { appSlug: orgApp.app.slug, status: "disabled", runtimeStopped: stopped },
       });
       return row;
     });

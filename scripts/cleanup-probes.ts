@@ -48,8 +48,14 @@ async function main() {
   for (const name of folders) {
     try {
       rmSync(join(root, name), { recursive: true, force: true, maxRetries: 5, retryDelay: 400 });
-    } catch (e) {
-      console.log(`  left behind (in use): ${name} — ${(e as Error).message.split("\n")[0]}`);
+    } catch (e: any) {
+      const msg = e && e.message ? e.message.split("\n")[0] : String(e);
+      const code = e && e.code ? e.code : "";
+      if (code === "EPERM" || code === "EBUSY") {
+        console.warn(`  skipping (in use, ${code}): ${name} — ${msg}`);
+      } else {
+        console.warn(`  left behind: ${name} — ${msg}`);
+      }
     }
   }
   console.log("folders removed:", folders.length);

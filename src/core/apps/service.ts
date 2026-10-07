@@ -99,6 +99,49 @@ export async function isAppActive(
   return orgApp?.status === "active";
 }
 
+/** Prisma's unique-constraint violation code (`P2002`), without importing the runtime. */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "P2002";
+}
+
+/**
+ * Writes the org's install row, tolerating a lost race.
+ *
+ * Two concurrent installs of the same system both pass the "already installed?"
+ * read and then both `create`; one wins and the loser gets a Prisma `P2002`. The
+ * loser must report the same settled state the winner produced, not a 500, so the
+ * unique violation is caught and the winner's row is returned with `created:
+ * false`. Any other error still propagates.
+ */
+async function createOrgAppRow(
+  organizationId: string,
+  appId: string,
+  version: string,
+  configuration?: AnyJson,
+): Promise<{ row: organizationApp; created: boolean }> {
+  try {
+    const row = await prisma.organizationApp.create({
+      data: {
+        id: randomUUID(),
+        organizationId,
+        appId,
+        status: "active",
+        version,
+        configuration: configuration ?? undefined,
+        activatedAt: new Date(),
+      },
+    });
+    return { row, created: true };
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    const existing = await prisma.organizationApp.findUnique({
+      where: { organizationId_appId: { organizationId, appId } },
+    });
+    if (!existing) throw err;
+    return { row: existing, created: false };
+  }
+}
+
 /**
  * Install an application for an organization.
  * Validates the app exists, isn't already installed, and applies default config.
@@ -132,16 +175,17 @@ export async function installApp(
     throw ApiError.badRequest("Application is already installed");
   }
 
-  const orgApp = await prisma.organizationApp.create({
-    data: {
-      organizationId,
-      appId: app.id,
-      status: "active",
-      version: app.version,
-      configuration: (parsed.configuration as AnyJson) ?? undefined,
-      activatedAt: new Date(),
-    },
-  });
+  const { row: orgApp, created } = await createOrgAppRow(
+    organizationId,
+    app.id,
+    app.version,
+    (parsed.configuration as AnyJson) ?? undefined,
+  );
+  if (!created) {
+    // Lost a concurrent-install race: the winner's row is the answer, not an
+    // error, so a double-clicked Install costs a clone the winner already did.
+    return formatOrgApp(orgApp);
+  }
 
   await cloneInstalledSystem(organizationId, app.slug);
 
@@ -305,6 +349,51 @@ export async function requestSystemForTenant(
   return { state: "pending", requestId: row.id, route: null, created: true };
 }
 
+export interface WithdrawSystemRequestResult {
+  /** True when a pending request existed and was removed. */
+  withdrawn: boolean;
+  /** Always null today; present so the card can treat both request paths alike. */
+  route: string | null;
+}
+
+/**
+ * A member withdraws their organization's pending request for a system.
+ *
+ * The approvals queue only shrinks when an admin decides, so a customer who
+ * changed their mind had no way to say so. The pending row is deleted rather
+ * than marked: `@@unique([organizationId, appId])` allows exactly one request
+ * per system, so a leftover row would shadow the next request, and the audit
+ * log is what preserves the history. Refused when nothing is pending — an
+ * already-installed system has nothing to withdraw.
+ */
+export async function withdrawSystemRequest(
+  organizationId: string,
+  input: { slug: string; userId: string },
+): Promise<WithdrawSystemRequestResult> {
+  const app = await prisma.app.findUnique({ where: { slug: input.slug } });
+  if (!app) {
+    throw ApiError.notFound("System not found");
+  }
+
+  const pending = await prisma.organizationAppRequest.findFirst({
+    where: { organizationId, appId: app.id, status: "pending" },
+    select: { id: true },
+  });
+  if (!pending) {
+    throw ApiError.notFound("There is no pending request to withdraw");
+  }
+
+  await prisma.organizationAppRequest.delete({ where: { id: pending.id } });
+
+  await writeAuditLog(
+    prisma,
+    { organizationId, userId: input.userId },
+    { action: "marketplace.app.withdrawn", entityType: "app", entityId: app.id },
+  );
+
+  return { withdrawn: true, route: null };
+}
+
 /**
  * True when this org's own copy of a system has never been built.
  *
@@ -350,8 +439,9 @@ export interface InstallSystemResult {
  *  - the platform has a **runnable source** for the slug (`system/<slug>/`
  *    satisfying the whole contract in `systemContract`) — the org gets its own
  *    private copy of the code, its own database and its own process, mounted at
- *    `/{org}/{system}`, immediately. No human is involved, because there is
- *    nothing for a human to decide.
+ *    `/{org}/{system}`, immediately. This is the mechanism an admin's approval
+ *    runs; the human decision was already made in the approvals queue, so the
+ *    function itself decides nothing.
  *  - it does not — there is no code to hand over, so the request goes to the
  *    platform approval queue exactly as before. This is the correct answer for
  *    the eight catalog systems whose sources are not in this repo, and faking an
@@ -419,17 +509,17 @@ export async function installSystemForOrg(
   // back short of the platform console.
   await upsertVaultEntry({ slug: org.slug, orgId: organizationId });
 
-  const row = await prisma.organizationApp.create({
-    data: {
-      id: randomUUID(),
-      organizationId,
-      appId: app.id,
-      status: "active",
-      version: app.version,
-      activatedAt: new Date(),
-    },
-    select: { id: true },
-  });
+  const { row, created } = await createOrgAppRow(organizationId, app.id, app.version);
+  if (!created) {
+    // A concurrent install won the race. Report the settled state, not a 500 —
+    // a double-clicked Install button is a normal occurrence, not an error.
+    return {
+      state: orgSystemNeedsBuild(org.slug, app.slug) ? "preparing" : "installed",
+      requestId: null,
+      route,
+      created: false,
+    };
+  }
 
   const clone = await cloneInstalledSystem(organizationId, app.slug);
   if (!clone.cloned) {
@@ -501,6 +591,58 @@ export async function uninstallApp(
   }
 
   await prisma.organizationApp.delete({ where: { id: orgApp.id } });
+}
+
+/** What an uninstall did, and what it deliberately left in place. */
+export interface UninstallSystemResult {
+  /** True when a running process for the org's copy was stopped. */
+  stopped: boolean;
+  /** The org's cloned files are kept — an uninstall is not a data wipe. */
+  filesKept: boolean;
+  /** The org's private database is kept — re-installing reuses it. */
+  databaseKept: boolean;
+}
+
+/**
+ * Uninstall a system from an org: stop its runtime, then remove the install row.
+ *
+ * The old `uninstallApp` deleted the row and nothing else, so the org's Node
+ * process kept running against a system it no longer owned. This stops the
+ * process first so there is no window where a live runtime has no install behind
+ * it, and it reports what it left on disk: the cloned files and the org's private
+ * database are kept, so re-installing reattaches instead of rebuilding from
+ * scratch. A destructive wipe would be a separate, explicit operation.
+ *
+ * `stop` is injectable so the decision can be tested without spawning processes.
+ */
+export async function uninstallSystemForOrg(
+  organizationId: string,
+  slug: string,
+  stop?: (orgSlug: string, systemSlug: string) => boolean,
+): Promise<UninstallSystemResult> {
+  const app = await prisma.app.findUnique({ where: { slug }, select: { id: true } });
+  if (!app) throw ApiError.notFound("Application not found");
+
+  const orgApp = await prisma.organizationApp.findUnique({
+    where: { organizationId_appId: { organizationId, appId: app.id } },
+    select: { id: true },
+  });
+  if (!orgApp) throw ApiError.notFound("Application is not installed");
+
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { slug: true },
+  });
+
+  // Imported lazily: the supervisor pulls in `node:child_process`, which has no
+  // business in every module that reads the marketplace catalog.
+  const stopRuntime =
+    stop ?? (await import("@/core/systems/runtime/supervisor")).stopOrgRuntime;
+  const stopped = org ? stopRuntime(org.slug, slug) : false;
+
+  await prisma.organizationApp.delete({ where: { id: orgApp.id } });
+
+  return { stopped, filesKept: true, databaseKept: true };
 }
 
 /**
@@ -848,6 +990,10 @@ export async function getCustomerMarketplace(
     // so a system that becomes available needs no re-seed of a stored flag.
     const soon = getSystemById(row.slug)?.status === "soon";
     const installed = installedMap.get(row.id) === true;
+    // An install whose pristine source was removed can no longer be served:
+    // `/{org}/{system}` checks `listSystemSources()` and 404s. Report it as
+    // unavailable and drop the route rather than offer a link that cannot work.
+    const sourceMissing = installed && !sourceSlugs.includes(row.slug);
     return {
       id: row.id,
       slug: row.slug,
@@ -880,12 +1026,15 @@ export async function getCustomerMarketplace(
       // "Open" button and the recently-opened chips navigate to, so it must only
       // ever name a system this org actually has.
       route:
-        kind === "real" && !installed
+        installed && sourceMissing
           ? null
-          : (openRouteForOrgSlug(row.slug, org?.slug, sourceSlugs) ?? row.routePrefix),
+          : kind === "real" && !installed
+            ? null
+            : (openRouteForOrgSlug(row.slug, org?.slug, sourceSlugs) ?? row.routePrefix),
       state: installState({
         appIsActive: row.isActive,
         installed,
+        sourceMissing,
         // Only a real system is ever cloned per org, so only it can have a build
         // outstanding; a demo or an in-shell module is servable as it stands.
         needsBuild: installed && kind === "real" ? orgSystemNeedsBuild(org?.slug ?? "", row.slug) : false,

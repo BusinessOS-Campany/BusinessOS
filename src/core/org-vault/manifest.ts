@@ -204,7 +204,7 @@ export async function buildManifest(
     vault: {
       root: paths.root,
       folder: entry.folder,
-      sizeBytes: pathSize(paths.root),
+      sizeBytes: pathSize(paths.root), // recorded at provisioning time (not live folder walk)
     },
     // The org is a schema in the shared server. Its portable copy is the .sql
     // file, written on sign-out and loaded back when the org is opened.

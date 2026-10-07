@@ -49,7 +49,7 @@ Central dynamic system catalog + self-service marketplace + admin manager.
 2. إن كان `real` → `organizationAppRequest` بحالة `pending` + سجل تدقيق
    `marketplace.app.requested` + شارة "قيد موافقة المنصة" في سوقه و`/my-apps`.
 3. المدير يقرّر في `/platform-admin/approvals` (لوحة `app-requests`):
-   approve → `organizationApp` فعالة (يعمل `installApp` بنفس المعاملات)؛
+   approve → `organizationApp` فعالة (يعمل `installSystemForOrg` بنفس المعاملات)؛
    reject → تبقى مرفوضة (يُعاد الطلب من السوق عند الحاجة).
 4. فور الموافقة، تظهر البطاقة بحالة `installed` وتفتح المسار الحقيقي.
 

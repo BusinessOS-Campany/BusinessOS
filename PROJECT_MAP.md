@@ -121,6 +121,31 @@ docker-compose.yml        # postgres:18 + pgadmin (redis commented out)
 
 ---
 
+## 2026-10-06 — THE DENTAL 2D CHART BROKE OUT OF ITS CONTAINER ON PHONES (implemented, verified)
+
+**The report:** the tooth chart on the dental-chart page overflowed its card to the right on a phone — the page over-scrolled horizontally and teeth were cropped at both edges.
+
+### Why it overflowed
+
+`dental-chart.tsx` sized a tooth as `(gridW - H_GAP) / 8` — the **quad** divisor — but each arch row holds **16 teeth** (two quads of 8) plus one 24px gap, so the row is `16 * toothW + 24` wide. A 390px phone gives a ~306px card; the formula produced `toothW ≈ 36` and a row ≈ 600px, i.e. roughly twice the container. The same code shipped in all three copies (`system/dental`, `demo-systems/dental`, and the org clone under `orginazition/`), so every build carried the bug.
+
+### The fix
+
+- Arch sizing maths extracted to `system/dental/src/lib/dental-chart-layout.ts` (also copied to the demo and org trees): `computeToothWidth(gridWidth)` sizes a tooth from the **row** divisor (16) with `TOOTH_W_BASE = 42`, floor `TOOTH_W_MIN = 17`, `H_GAP = 24`; `toothRowWidth` mirrors the row formula. Primary rows (10 teeth) fit under the same rule.
+- Both arch rows (upper and lower) are now wrapped in `overflow-x-auto` with `mx-auto flex w-max`, so an oversized row is contained and centered inside the card instead of spilling it — the floor of 17px is preserved as a tappable target.
+- Applied identically to `system/dental`, `demo-systems/dental`, and the live org clone; all three copies byte-identical after the change.
+
+### Verification
+
+- TDD: `tests/core/dental-chart-layout.test.ts` — 4 tests; module-not-found fails first, then green.
+- `tsc --noEmit` 0 in the repo root, `system/dental`, and `demo-systems/dental`; `eslint` 0 on the touched files in both sub-app scopes; full suite **754/754 (60 files)** green.
+- `demo-systems/dental` rebuilt with `next build --webpack` and restarted on `:3106`; the org clone rebuilt and its `next start` restarted by the deploy session.
+- Puppeteer-core + Edge probe (`Temp\opencode\dental-chart-probe.cjs`) against the live demo on `:3106` at **390×844 and 1920×1080**: 14/14 PASS — `scrollWidth == clientWidth` (no document horizontal overflow), chart card fully inside the viewport, both arch rows fit their wrappers (`inner == client`, e.g. 306==306 on a 390px phone), 16 teeth per ADULT row / 10 per PRIMARY row, tooth width 18px on phone and 42px on desktop.
+
+Root `npm run build` intentionally not re-run for this step: the change is isolated to the dental sub-apps (validated by their own `next build --webpack`), and a platform rebuild could contend with the live `next start` server on `:3100` (the locked-`.next` hazard recorded earlier in this file).
+
+**Follow-up (final state):** the tappable floor was shaved 17 → 15px so the mainstream width set fits with **zero inner scroll** — 360/375/390/414/430 (teeth 16/17/18/19/20px), 640/768/820/1280 (31/23/26/42px); only 320px keeps a contained 28px inner scroll beneath the floor (the page itself never over-scrolls). The md breakpoint (768–820px) then exposed a header overflow caused by the new notification bell: beside the sidebar the fixed 256px search + 234px action cluster exceeded the ~476px content area by 14px. Fixed in `app-shell.tsx` by letting the search shrink instead (`min-w-0 max-w-64 flex-1`, input `w-full`) in all three trees. Final sweep through the **production proxy on `:3100`**, 10 widths × chart+dashboard: document overflow 0 at every width, arch rows fit, header `ms-auto` in bounds everywhere. All gates green: root `tsc` 0, root `npm run build --webpack` 0, dental `tsc` 0 + `eslint` 0 on touched files, full suite **754/754 (60 files)**; `demo-systems/dental` rebuilt and serving `:3106` under the platform mount.
+
 ## 2026-10-05 — THE ADMIN CONSOLE HAD NO LOADING BOUNDARY, SO EVERY CLICK SHOWED NOTHING AT ALL FOR ITS FIRST HALF-SECOND (implemented, verified)
 
 **The report:** the console is *correct* now but still feels sluggish — the page you were on just sits there while the next one is fetched.
@@ -689,9 +714,140 @@ one would have left the actual outage untouched.
 
 ---
 
+## 2026-10-06 — THE PUBLIC SITE SAT BEHIND CLOUDFLARE 524 FOR HOURS, AND NOTHING LOCAL KNEW (fixed, verified, guarded)
+
+### What happened
+
+`https://bosc.dpdns.org/` returned **524** while the origin process was still alive. The tunnel was
+healthy, Postgres was healthy, and `next start -p 3100` (PID 22104) was accepting TCP — but never
+answered HTTP and pinned 99% of one core. The event loop was blocked, not the process. Its last
+log line was `02:41:25`. Every layer *outside* the machine reported "up", so nothing acted.
+
+A second, unexplained fact turned up: `.next/server` and `BUILD_ID` were **missing** while
+`cache`, `dev`, `diagnostics` and `types` survived, and the whole `.next` directory was rewritten
+at `04:59` by an actor that has not been identified. `.next` now exists because it was rebuilt, not
+because the cause was found. **This remains open** — see `[ORPHANS & PENDING]`.
+
+### Why a watchdog, and why this shape
+
+The outage was invisible to everything that already ran: there was no probe of *the local origin*,
+only of the tunnel. So the guard probes `http://127.0.0.1:3100/signin` directly and is deliberately
+dumb:
+
+- **Stateless probe on a Scheduled Task**, not a resident daemon — a daemon can wedge exactly like
+  the thing it is meant to watch, and then be as blind as everything else was.
+- **2 consecutive failures** before acting, so a single slow request never restarts anything.
+- **A wedged origin is detected as unhealthy**, because a wedged origin *is* unhealthy: any HTTP
+  response (including 4xx/5xx) counts as alive, so an application bug cannot cause a restart loop.
+- **Boot grace only applies while the port is unbound.** A port that is bound but silent is the
+  outage case, so it is restarted regardless of how young the process is; a server that has not
+  bound its port yet is spared for 180s.
+- **Kills only what belongs to its own port** — the port owner's task tree plus the npm/cmd
+  wrappers above it, reached by walking parent PIDs found from that port. It cannot reach the
+  organisation runtimes on `--port 41xx`, and a watchdog pointed at a sandbox port cannot reach
+  this platform.
+- **Rebuilds when `.next/BUILD_ID` is missing**, capped at 3 attempts, then stops loudly instead
+  of looping. A build that never succeeds must not become a rebuild storm.
+
+### The bugs found by testing this rather than by reading it
+
+Recorded because each one would have shipped:
+
+1. `$PSScriptRoot` is **empty during param binding** in PowerShell 5.1, so a default derived from
+   it throws before the script body runs. Computed after `param()` instead.
+2. `Stop-Platform` walked the parent chain **after** killing the port owner — by which time the
+   chain was unreachable, which is precisely the set of wrappers that keep holding the port.
+3. `$queue[1..($queue.Count-1)]` on a **one-element** array yields indices `1,0` (PowerShell
+   reverses the range) so the queue never empties; the BFS loop hung.
+4. `taskkill` writing to stderr under `$ErrorActionPreference = "Stop"` becomes a terminating
+   error and aborted the restart *between* kill and start — the worst possible moment. Invoked
+   through `Start-Process` with both streams redirected so they are never attached to the error
+   stream.
+5. A **missing `BUILD_ID` with a failing build** retried forever; now capped and reported.
+6. An initially-scoped process match of `run serve` would have killed the real platform during a
+   sandbox test — every kill is now derived from the target port.
+
+### Verification
+
+Sandboxed on port 3197 in a temp directory (cleaned up afterwards), never against port 3100:
+wedge detection within the probe timeout; threshold `1 → no action, 2 → restart`; wedge killed
+including its child; `recovered in 3s (HTTP 200)`; state reset and a subsequent healthy probe
+cleanly logged as recovered; boot grace spared an unbound-but-starting server while the bound
+wedge on the same port was restarted; `BUILD_ID` removal triggered exactly 3 rebuilds then
+`giving up - manual intervention required`; `-DryRun` logged and touched nothing. The live platform
+returned `healthy: HTTP 200` after every one of those runs, and `https://bosc.dpdns.org/signin`
+returns `200`.
+
+Registered as **`BusinessOS-PlatformWatchdog`** (every 5 min, `GMSNOW` / Interactive / Limited,
+`IgnoreNew`, `StartWhenAvailable`, 10 min execution cap — the same convention as
+`BusinessOS-DailyBackup`). Verified firing on schedule with automatic heartbeats at `11:13:36` and
+`11:18:36`, `LastTaskResult = 0`.
+
+**Known limitation:** `Interactive` logon means the task only runs while the user session exists —
+if nobody is logged in, the watchdog does not run. `S4U` would fix that but has its own credential
+constraints. A separate decision, not taken unilaterally here.
+
+**Still open:** who deleted `.next/server` at 04:59, and what blocked the event loop at 02:41.
+
+---
+
 ## [ORPHANS & PENDING]
 
 Everything below is NOT YET IMPLEMENTED. Updated continuously; entries removed only when their milestone's verifiable goals pass.
+
+### Open 2026-10-06 — two unexplained facts behind the Cloudflare 524 outage (not implemented, cause unknown)
+
+- **What deleted `.next/server` and `BUILD_ID`?** On 2026-10-06 the platform's `.next/server` and
+  `.next/BUILD_ID` were absent while `cache`, `dev`, `diagnostics` and `types` survived, and the
+  whole `.next` directory carried a `04:59` rewrite timestamp. The platform itself was not running a
+  build at that time and no root `next dev` was up. The site was restored by rebuilding, so this is
+  **not** blocking, but the cause was never identified and it will recur if it is not. What is
+  needed: a decisive check (file audit/`USN`/repro on a copy) of who writes `.next` outside
+  `npm run build`. Until then the watchdog only *masks* it — it rebuilds when `BUILD_ID` is gone
+  rather than explaining why it went.
+- **What blocked the event loop from 02:41?** `next start -p 3100` kept accepting TCP while never
+  answering HTTP and pinning 99% of one core, last log line `02:41:25`. Symptom of a synchronous
+  block, but nothing recorded what was running inside it. What is needed: a sample of the origin
+  process when it is next unhealthy (`Get-Process` + a managed dump, or an `--inspect` attach) so the
+  next occurrence produces a stack instead of a 524.
+- **Guard in place meanwhile:** `scripts/platform-watchdog.ps1`, scheduled task
+  `BusinessOS-PlatformWatchdog`, detects the wedge and restarts. See the 2026-10-06 entry above.
+  It is a mitigation, not a fix — remove it only after both questions are answered.
+
+### RESOLVED 2026-10-06 — BATCH 1 (Hygiene & Correctness, Low-Risk)
+
+- **#736 — Lint policy:** `eslint.config.mjs` now ignores `system/**` (matches existing policy for `orginazition/**` and `public/grocery/**`). Repo-wide lint behavior unchanged for owned source; template/vendor code under `system/**` excluded by policy. **Verified:** `tsc --noEmit` 0, `vitest run 750/750` green.
+- **#729 — pathSize excludes heavy dirs:** `src/core/org-vault/paths.ts::pathSize` now skips `node_modules`, `.next`, `.git` when walking directories. `readAllVaultFileStatus()` still does **not** request `folderBytes` (request-path remains off by default). `src/core/org-vault/manifest.ts` documents `vault.sizeBytes` is recorded at provisioning time. **Verified:** typecheck 0, no behavior change on tenant list path.
+- **#741 — Atomic uploads:** `src/core/integrations/storage.ts::LocalStorage.write()` now writes to a temp file (`.tmp.<pid>.<ts>`) and swaps via `rename`, with `EXDEV` fallback (copy+unlink) and cleanup on error. Prevents truncated half-files on mid-write crashes. **Verified:** logic safe, API unchanged, tests pass.
+- **#744 — Probe cleanup robustness:** `scripts/cleanup-probes.ts` treats `EPERM`/`EBUSY` as warnings (skips in-use folders) instead of hard failures, logs cause without throwing. Improves repeatability of probe runs. **No production impact.**
+- **#740 — Duplicate avatar fetch:** Inspected `profile-header.tsx` and `user-nav.tsx` — both render `session.user.image` (same ref). No obvious redundant independent fetches to remove surgically without restructuring; left as-is (revalidation gives 304). Documented as non-actionable surgically.
+- **#729 (manifest note):** Documented that `vault.sizeBytes` reflects provisioning-time size (not a live heavy walk). No code behavior change.
+
+### RESOLVED 2026-10-06 — BATCH 2 (#734: Grocery template mount escapes)
+
+- **#734 — Grocery template root-absolute URLs.** Re-audited `system/grocery/src`. Every raw `fetch`/`<img src>` and the three native GET filter forms already route through the mount-aware helper (`src/lib/app-url.ts`: `mountedHref`/`appHref`/`serviceWorkerUrl`), and `report-shell.tsx`'s `printHref` was correctly left alone because it reaches `next/link`, which applies `basePath`. Confirmed against the installed Next 16.3.2: `redirect()` gets `basePath` applied **server-side** (`server/app-render/app-render.js:2390` → `addPathPrefix(url, basePath)`), and `next/link` applies it client-side (`client/add-base-path.js`), so the entry's `layout.tsx:18` and `report-shell.tsx:38` citations were **not** defects. **The one genuine remaining gap:** the report date-range form at `report-shell.tsx:51` used a *native* `<form method="GET" action={basePath}>`, which nothing rewrites — it submitted to the origin root and escaped the mount. Fixed to `action={mountedHref(basePath)}`, matching the three sibling filter forms.
+- **Guard extended:** `tests/core/grocery-mounted-urls.test.ts`'s `RAW_FORM_ACTION` rule only matched a quoted literal after `action={`, so it could not see `action={basePath}`. Added `RAW_GET_FORM_ACTION` (native GET form whose `action` is a bare identifier; server-action forms are POST with `action={fn}`, so they stay unflagged). Verified it matches the old code and not the fixed code nor any other form in the template.
+- **Verified:** root `tsc --noEmit` clean; `system/grocery` `tsc --noEmit` clean; guard test 9/9; template `vitest run` 29/29. No clone rebuild performed — template-only edit; existing clones adopt it on their next build.
+
+### RESOLVED 2026-10-07 — BATCH 3 (Lifecycle, Concurrency & Uninstall)
+
+All five `[ORPHANS & PENDING]` lifecycle items closed. Full suite **770/770 across 62 files** (was 750/59); root `tsc --noEmit` clean; eslint clean on every touched file (one pre-existing `no-img-element` warning in `app-marketplace.tsx`, unrelated).
+
+- **#889 — Install warms the org runtime.** New `src/core/systems/runtime/warm.ts::warmOrgRuntime()` calls `ensureOrgRuntime` fire-and-forget from the approval route (`app-requests/[id]`), so the customer's first open is already built instead of the card sitting at "Preparing" for the 20-minute deadline. A warm failure is recorded to `orginazition/<org>/systems/<slug>/.runtime.error.json` **and** the org's `provisioning.log`, and `GET /api/v1/apps/[slug]/install` now reports `state: "failed"` with the message (a new `preparingFailed` dictionary key, ar+en) — the marketplace card shows `unavailable` + a toast instead of spinning forever. Cleared by the next successful boot.
+- **#890 — Boot concurrency is bounded.** New pure `src/core/systems/runtime/boot-gate.ts` (`createBootGate`) caps concurrent cold builds globally (`SYSTEM_RUNTIME_BOOT_CONCURRENCY`, default 2) with a bounded wait queue (`SYSTEM_RUNTIME_BOOT_QUEUE`, default 32) and a wait timeout (`SYSTEM_RUNTIME_BOOT_QUEUE_TIMEOUT_MS`, default 120 s). `ensureOrgRuntime` acquires a slot around `boot()` and releases it in `finally`; a full queue or an expired wait rejects with a clear error rather than hanging a request thread. Covered by `tests/core/boot-gate.test.ts` (6 tests: cap, handover, queue-full refusal, timeout, reset).
+- **#891 — Customer-facing uninstall, and revoke stops the runtime.** New `uninstallSystemForOrg(organizationId, slug, stop?)` in `src/core/apps/service.ts` stops the org's runtime first (injected `stop` defaults to the lazily-imported `stopOrgRuntime`, so no process is spawned in tests), then deletes the install row, returning `{ stopped, filesKept: true, databaseKept: true }`. Exposed as `DELETE /api/v1/profile/systems` (new method on the existing profile-systems route, `systems:manage`, returns the refreshed profile overview + an audit row). The platform revoke route (`DELETE /api/platform/tenants/[id]/apps/[appId]`) now also stops the runtime before disabling the row and records `runtimeStopped`. Covered by `tests/core/batch3-uninstall.test.ts`. **Note:** no org-delete route exists, so the "deleting an org cannot leave a process behind" half remains a property to keep when such a route is added (the `organization.delete` primitive still has zero callers).
+- **#891 (live leak) / #892 — Orphan detection.** `catalog.ts::orphanedInstalledSlugs(installedSlugs, sourceSlugs)` names installed systems whose `system/<slug>/` source was removed, and `scripts/orphaned-systems.ts` reports them per org (exit 1 when any found, `--json` for machines). The marketplace card now reports such an install as `unavailable` and drops its route (`installState` gained `sourceMissing`), instead of offering an Open that `/{org}/{system}` answers 404 for.
+- **#893 — Concurrent install race settled.** `src/core/apps/service.ts` gained `isUniqueViolation()` + `createOrgAppRow()`: an insert that loses the `@@unique([organizationId, appId])` race re-reads and returns the winner's row (`created: false`). `installSystemForOrg` returns the settled `{state, created: false}` result and `installApp` returns the winner's row — no raw Prisma error ever reaches the caller. Covered by `tests/core/batch3-uninstall.test.ts` (two parallel `installApp` calls → one row, equal result id) and the existing `m17` idempotency test.
+
+### RESOLVED 2026-10-07 — BATCH 4 (Marketplace polish: i18n, cancel, capacity, docs)
+
+The `/systems` self-service-install polish cluster from 2026-10-01. Full suite **776/776 across 63 files** (was 770/62); root `tsc --noEmit` clean; eslint clean on every touched file.
+
+- **The catalog grid is localized.** `src/components/demo/business-systems-section.tsx` hard-coded every string, so an English visitor got an English shell around an Arabic grid. It now takes optional `dict`/`locale` (mirroring `app-marketplace.tsx`), reads `platform.catalog.*` from `src/core/i18n/dictionaries.ts` (new namespace, ar+en), and picks `nameAr`/`nameEn` and the category labels by locale. `src/app/systems/page.tsx` calls `getDictAndDir()`, threads `dict`/`locale` into the grid and localizes its own hero/how-it-works copy too. The public `/demo` page is a client component outside the dictionary shell, so it omits the props and keeps rendering Arabic — its prior behavior, unchanged.
+- **A pending request can be withdrawn by the member who filed it.** New `withdrawSystemRequest(organizationId, {slug, userId})` in `src/core/apps/service.ts` deletes the `pending` `organizationAppRequest` row (only one can exist per org+app) and writes a `marketplace.app.withdrawn` audit row; already-installed / never-requested systems 404. Exposed as `DELETE /api/v1/apps/[slug]/request` (gated `systems: ["install"]`, the same permission that filed it). The card's pending state is now a button labelled "إلغاء الطلب" that withdraws and clears the override via `onWithdrawn` + `router.refresh()`. Covered by `tests/core/batch4-withdraw.test.ts` (5 tests + 2 route-source assertions).
+- **`/systems` says how many systems the deployment can serve.** The page computes `installableCardIds(...).size` and renders "يخدم هذا النشر {count} من أصل {total} نظاماً" above the grid, with a link to `/demo` to browse the rest — 173 cards with one "ثبّت الآن" now reads as a deployment fact, not a bug.
+- **Stale "instant tenant install" docs corrected.** `docs/AUDIT-2026.md` row 8 is marked **SUPERSEDED** (the instant path was removed; only the admin approval runs `installSystemForOrg`); `docs/MARKETPLACE.md` now names `installSystemForOrg` (was `installApp`); the `installSystemForOrg` doc comment no longer claims "no human is involved" — it is the mechanism an admin's already-made decision runs.
+- **Deferred (documented, not done):** the deeper probe-cleanup follow-up (an unwatched vault root, or a `removeOrg` that closes the runtime's file handles first — see the "A running server makes probe cleanup impossible" entry below). It touches process/handle lifecycle and is infrastructure, not polish, so it was left for its own change.
 
 ### Found while wiring the dental demo on 2026-10-05 — D3, D4 and D5 done, D6 open (classification resolved)
 
@@ -731,7 +887,7 @@ Everything below is NOT YET IMPLEMENTED. Updated continuously; entries removed o
 - **The cold document load is ~5 s and is untouched.** `GET /platform-admin` answers 200 in 4 882–5 406 ms end to end. That is the full HTML document through the tunnel plus the server render, not a per-click cost, and it is the same number the grocery entry above records — a deployment concern, not a code defect. Left alone deliberately. One run on 2026-10-05 measured 30 026 ms through the probe, which is Chrome's `networkidle2` heuristic rather than the app: the server's own render in that same run was 160–764 ms and a direct fetch of the document through the tunnel took 442–1 245 ms.
 
 ### Found while fixing product creation and slow navigation on 2026-10-03 — not implemented, deliberately out of scope
-- **The grocery template escapes its own `basePath` in eight places, so eight features 404 or land on the wrong app when a clone is served under `/{org}/{system}`.** `next/link` and `<Link>` add the basePath; a raw `fetch("/api/…")`, `<a href>`, `<img src>` or `redirect("/…")` does not. Found by grepping `system/grocery/src` for root-absolute URLs: `features/shell/notifications-bell.tsx:76` (`/api/notifications`), `features/shell/voice-dictation.tsx:147` and `components/voice-input.tsx:85` (`/api/ai/transcribe`), `features/customers/ui/image-view.tsx:7` + `(app)/customers/[id]/statement/page.tsx:239` (`/api/customers/transactions/…/image`), `(app)/settings/backup/page.tsx:61` (`/api/backups/…/download`), `features/reports/ui/report-shell.tsx:38` (`/api/reports/print`), and `(app)/layout.tsx:17` (`redirect("/api/auth/expire?next=%2Flogin")`). Confirmed live: `/gm/grocery/manifest.webmanifest` 307s to the **platform's** `/signin`, which is why every page load logs `Manifest: Line: 1, column: 1, Syntax error.` — the browser is parsing an HTML sign-in page as JSON. **These are template edits: fixing only `system/grocery` leaves every deployed clone broken, and fixing the clones means rebuilding them. Goal: no root-absolute URL remains in the template, and a clone served under a mount fetches only URLs inside that mount.**
+- ~~**The grocery template escapes its own `basePath` in eight places, so eight features 404 or land on the wrong app when a clone is served under `/{org}/{system}`.**~~ **RESOLVED 2026-10-06 — see the BATCH 2 entry above.** All eight constructs are mount-aware: seven route through `mountedHref`, and `report-shell.tsx`'s `printHref` is safe because it reaches `next/link`. The audit's inclusion of `redirect("/api/auth/expire…")` (`layout.tsx:17-18`) was a false positive — Next applies `basePath` to `redirect()` server-side (`app-render.js:2390`). The genuinely missed case was the report form's native `action={basePath}`, now fixed. **These are template edits: fixing only `system/grocery` leaves every deployed clone broken, and fixing the clones means rebuilding them. Goal: no root-absolute URL remains in the template, and a clone served under a mount fetches only URLs inside that mount.**
 - **A running `next start` and `next build` must not share one `.next`** (recorded above, 2026-10-03, still open). Hit again here: `pm2 restart` after `npm run build` is the only reason the fix went live cleanly.
 - **`npm run lint` is not green and cannot be** — 71 234 problems (7 162 errors), essentially all inside `system/grocery/**`, a customer-owned app with its own toolchain that `eslint.config.mjs` deliberately ignores under `orginazition/**` and `public/grocery/**` but **not** under `system/**`. So the gate this repo advertises fails on code it does not own and does not lint-by-policy elsewhere. **Goal: `system/**` joins the ignore list, and `npm run lint` reports 0.**
 
@@ -744,17 +900,17 @@ Everything below is NOT YET IMPLEMENTED. Updated continuously; entries removed o
 - **A running server makes probe cleanup impossible, and the probes cannot see that it happened.** `scripts/cleanup-probes.ts` removes the DB rows, the vault folder and the registry entry, and the two browser probes clean up after themselves — but the pm2 process holds `orginazition/<org>/` open (the delete fails with `EPERM`) and keeps the whole registry in memory, so its next write resurrects every entry the script removed. The symptom is silent: the DB is empty, the pages return 200, and `orginazition/` slowly fills with folders and `_registry/registry.json` grows a `probe-*` key per run. This is exactly how 8 stale `probe-sysinstall-*` registry entries and 7 folders accumulated with no database row behind any of them. **Goal: probe orgs are created under a root the platform does not watch, or the vault exposes a `removeOrg` that closes handles first, so a check can be run repeatedly without an operator stopping pm2.**
 
 ### Found while making /systems install ask for approval on 2026-10-01 — not implemented, deliberately out of scope
-- **The self-service install that was removed is still described as the product's behaviour in three places**, so the next reader will wire it back up: `docs/AUDIT-2026.md` row 8 still records "Marketplace: single-app install is instant (`active`) vs template install queues `pending`" as a *deliberate product difference*, and `docs/MARKETPLACE.md` documents the same split. `installSystemForOrg` keeps its "no human is involved, because there is nothing for a human to decide" comment, which is now false for a tenant because only an admin may call it. **Goal: the docs and the comment say one thing — a tenant install queues — and the audit row is marked superseded rather than left to be read as current.**
-- **`/systems` can offer install on exactly one of its 173 cards, and the page does not say why.** `installableCardIds` is honest — a card needs an active `app` row *and* a source under `system/` — but a visitor sees a grid of 173 systems with a single "ثبّت الآن", which reads as a bug rather than as a deployment fact. The 4 demo cards (`pos`, `cafe`, `laboratory`, `optometry`) are `available` in the curated catalog and answer `200`, yet serve the branded "not installed" fallback, so they are correctly excluded. **Goal: the page states how many systems this deployment can serve and links to the work that would raise it.**
-- **`business-systems-section.tsx` hard-codes every Arabic string, unlike the rest of the repo.** The rest of `/systems` and `/apps` read `platform.marketplace.*` from `core/i18n/dictionaries`, so an English visitor gets an English marketplace and a translated-shell Arabic catalog grid. The new labels (مثبّت, قيد الموافقة, بانتظار الموافقة) followed the file's own convention. **Goal: the grid takes `dict`/`locale` like its sibling, and the strings move to `locales/{ar,en}/`.**
-- **A queued system shows no way to cancel it.** The card correctly stops offering the button once a request is pending, and a rejected request is reopened on the next request, but nothing withdraws a request the customer no longer wants — the queue only shrinks when an admin decides. **Goal: a pending request can be withdrawn by the member who made it, and the card offers "إلغاء الطلب".**
+- ~~**The self-service install that was removed is still described as the product's behaviour in three places**, so the next reader will wire it back up: `docs/AUDIT-2026.md` row 8 still records "Marketplace: single-app install is instant (`active`) vs template install queues `pending`" as a *deliberate product difference*, and `docs/MARKETPLACE.md` documents the same split. `installSystemForOrg` keeps its "no human is involved, because there is nothing for a human to decide" comment, which is now false for a tenant because only an admin may call it. **Goal: the docs and the comment say one thing — a tenant install queues — and the audit row is marked superseded rather than left to be read as current.**~~ **RESOLVED 2026-10-07 — see the BATCH 4 entry above.**
+- ~~**`/systems` can offer install on exactly one of its 173 cards, and the page does not say why.** `installableCardIds` is honest — a card needs an active `app` row *and* a source under `system/` — but a visitor sees a grid of 173 systems with a single "ثبّت الآن", which reads as a bug rather than as a deployment fact. The 4 demo cards (`pos`, `cafe`, `laboratory`, `optometry`) are `available` in the curated catalog and answer `200`, yet serve the branded "not installed" fallback, so they are correctly excluded. **Goal: the page states how many systems this deployment can serve and links to the work that would raise it.**~~ **RESOLVED 2026-10-07 — see the BATCH 4 entry above.**
+- ~~**`business-systems-section.tsx` hard-codes every Arabic string, unlike the rest of the repo.** The rest of `/systems` and `/apps` read `platform.marketplace.*` from `core/i18n/dictionaries`, so an English visitor gets an English marketplace and a translated-shell Arabic catalog grid. The new labels (مثبّت, قيد الموافقة, بانتظار الموافقة) followed the file's own convention. **Goal: the grid takes `dict`/`locale` like its sibling, and the strings move to `locales/{ar,en}/`.**~~ **RESOLVED 2026-10-07 — see the BATCH 4 entry above (strings landed in `core/i18n/dictionaries.ts` under `platform.catalog.*`, the repo's single dictionary module, not a `locales/` tree).**
+- ~~**A queued system shows no way to cancel it.** The card correctly stops offering the button once a request is pending, and a rejected request is reopened on the next request, but nothing withdraws a request the customer no longer wants — the queue only shrinks when an admin decides. **Goal: a pending request can be withdrawn by the member who made it, and the card offers "إلغاء الطلب".**~~ **RESOLVED 2026-10-07 — see the BATCH 4 entry above.**
 
 ### Found while making system install self-service on 2026-10-01 — not implemented, deliberately out of scope
-- **The install does not warm the org's runtime, so the first open still pays the whole build.** `installSystemForOrg` writes the row and clones the files in ~1 s, and the marketplace then polls `GET /api/v1/apps/[slug]/install` until `.runtime.json` appears — but nothing in the platform ever *starts* that build. The build is triggered only by the first `GET /{org}/{system}` (`ensureOrgRuntime` → `boot` → `ensureBuilt`), which the card deliberately does not navigate to. So a card that is not currently open sits at "Preparing" for the full 20-minute deadline and then times out, and the install is not actually usable until someone opens it once. Warming means firing `ensureOrgRuntime` (not awaiting it) at install time, and reporting a boot failure somewhere the org can see. **Goal: after Install, `/{org}/{system}` answers 200 without a cold build, and a failed build is visible to the org rather than only in the provisioning log.**
-- **Boot concurrency is unbounded across orgs.** `evictIfFull` bounds *running* processes to `MAX_RUNNING` (8) but nothing bounds concurrent *builds*, so a bulk approval of N orgs starts N `npm run build` and N `prisma migrate deploy` at once — 8 GB heap each per `scripts/build.ts`, on one machine. `booting` only serialises per (org, system), which is the wrong granularity for this. **Goal: a queue bounds concurrent cold boots, and one org's build cannot make the platform unresponsive for everyone else.**
-- **There is still no customer-facing uninstall, and the leak was measured live.** `uninstallApp` (`core/apps/service.ts`) and `shutdownSystemRuntime` (`systems/runtime/proxy.ts`) both exist and neither is called by any route. `DELETE /api/platform/tenants/[id]/apps/[appId]` only sets `status:"disabled"`, so a revoked org keeps its process, its port, its clone and its `node_modules` junction. Reproduced on 2026-10-01: deleting a throwaway org's rows left three `next start` processes running against `orginazition/verify-…/systems/grocery`, each holding its own PostgreSQL database, with nothing reporting them. **Goal: one endpoint stops the runtime, marks the row, and says whether the files and database are kept or destroyed — and deleting an org cannot leave a process behind.**
-- **Removing a system source orphans every org that installed it.** The install gate reads `systemContract(slug)` at request time, so deleting `system/<slug>/` makes an already-installed system report "no source" on its next reinstall attempt while its existing clone keeps serving. Nothing detects the divergence, and the marketplace keeps offering "Open". **Goal: an org whose source was removed is reported by one command, and the card stops offering an install that cannot be reproduced.**
-- **A second write race: two concurrent installs both see no existing row.** The `findUnique`-then-`create` in `installSystemForOrg` is not in a transaction, so a double-clicked Install (or a retry after a timeout) can hit the `@@unique([organizationId, appId])` constraint and surface a raw Prisma error instead of the idempotent answer. The `waiting` set in the card hides this for one browser and nothing hides it for two. **Goal: a concurrent second install returns the first install's result rather than an error.**
+- ~~**The install does not warm the org's runtime, so the first open still pays the whole build.** `installSystemForOrg` writes the row and clones the files in ~1 s, and the marketplace then polls `GET /api/v1/apps/[slug]/install` until `.runtime.json` appears — but nothing in the platform ever *starts* that build. The build is triggered only by the first `GET /{org}/{system}` (`ensureOrgRuntime` → `boot` → `ensureBuilt`), which the card deliberately does not navigate to. So a card that is not currently open sits at "Preparing" for the full 20-minute deadline and then times out, and the install is not actually usable until someone opens it once. Warming means firing `ensureOrgRuntime` (not awaiting it) at install time, and reporting a boot failure somewhere the org can see. **Goal: after Install, `/{org}/{system}` answers 200 without a cold build, and a failed build is visible to the org rather than only in the provisioning log.**~~ **RESOLVED 2026-10-06 — see the BATCH 3 entry above.**
+- ~~**Boot concurrency is unbounded across orgs.** `evictIfFull` bounds *running* processes to `MAX_RUNNING` (8) but nothing bounds concurrent *builds*, so a bulk approval of N orgs starts N `npm run build` and N `prisma migrate deploy` at once — 8 GB heap each per `scripts/build.ts`, on one machine. `booting` only serialises per (org, system), which is the wrong granularity for this. **Goal: a queue bounds concurrent cold boots, and one org's build cannot make the platform unresponsive for everyone else.**~~ **RESOLVED 2026-10-06 — see the BATCH 3 entry above.**
+- ~~**There is still no customer-facing uninstall, and the leak was measured live.** `uninstallApp` (`core/apps/service.ts`) and `shutdownSystemRuntime` (`systems/runtime/proxy.ts`) both exist and neither is called by any route. `DELETE /api/platform/tenants/[id]/apps/[appId]` only sets `status:"disabled"`, so a revoked org keeps its process, its port, its clone and its `node_modules` junction. Reproduced on 2026-10-01: deleting a throwaway org's rows left three `next start` processes running against `orginazition/verify-…/systems/grocery`, each holding its own PostgreSQL database, with nothing reporting them. **Goal: one endpoint stops the runtime, marks the row, and says whether the files and database are kept or destroyed — and deleting an org cannot leave a process behind.**~~ **RESOLVED 2026-10-06 — see the BATCH 3 entry above. (The org-delete half is still open only because no org-delete route exists yet.)**
+- ~~**Removing a system source orphans every org that installed it.** The install gate reads `systemContract(slug)` at request time, so deleting `system/<slug>/` makes an already-installed system report "no source" on its next reinstall attempt while its existing clone keeps serving. Nothing detects the divergence, and the marketplace keeps offering "Open". **Goal: an org whose source was removed is reported by one command, and the card stops offering an install that cannot be reproduced.**~~ **RESOLVED 2026-10-06 — see the BATCH 3 entry above.**
+- ~~**A second write race: two concurrent installs both see no existing row.** The `findUnique`-then-`create` in `installSystemForOrg` is not in a transaction, so a double-clicked Install (or a retry after a timeout) can hit the `@@unique([organizationId, appId])` constraint and surface a raw Prisma error instead of the idempotent answer. The `waiting` set in the card hides this for one browser and nothing hides it for two. **Goal: a concurrent second install returns the first install's result rather than an error.**~~ **RESOLVED 2026-10-06 — see the BATCH 3 entry above.**
 
 ### Found while deploying the per-org install on 2026-10-01 — RESOLVED 2026-10-01
 - ~~**A full test-suite run silently deleted a real catalog system.** `m16-self-service-install.test.ts` exercised the "coming soon" guard by borrowing the first real curated `soon` slug, pushing its id onto its cleanup list, and deleting it in `afterAll` — so every run removed `veterinary` from the `app` table and from the marketplace for every customer, with the whole suite green. Nothing asserted the seeded catalog was still present, and the drift was invisible until an unrelated test failed with "catalog app 'grocery' is missing; run the seed" — pointing at a seed that was never at fault. **Fixed:** both that test and the two new ones now adopt-or-create and *fail loudly* if a borrowed row is gone, and `system-catalog-seed.test.ts` asserts every curated slug still has a row (201 rows, verified stable across consecutive full runs). **Goal met: a full run leaves the catalog byte-identical.**
@@ -835,7 +991,7 @@ The "unset means all-enabled" back-compat rule is preserved on both paths, so an
 
 ### Not defects, recorded so they are not "fixed" later
 - **`preparing` means "installed, not yet built" and is derived from the existence of `.runtime.json`**, deliberately not from `isBuildCurrent`. An org that edits their own system would otherwise flip the card back to "Preparing" for a build the supervisor would in fact reuse. The question the card asks is "has this copy ever run", and that is what it answers.
-- **The card is honest about a slow build rather than hiding it.** The poll interval grows 2 s → 15 s, stops on any terminal answer, and gives up at 20 minutes with a message rather than spinning forever. It does **not** start the build — see `[ORPHANS & PENDING]`, which records that as the next piece of work along with boot concurrency, uninstall, source removal and a second-install write race.
+- **The card is honest about a slow build rather than hiding it.** The poll interval grows 2 s → 15 s, stops on any terminal answer (including the new `failed` state when the install-time warm boot errored), and gives up at 20 minutes with a message rather than spinning forever. Since BATCH 3 the build is started at install time, so the poll normally finds it already `installed`; it also still covers the cold path where nothing warmed it. See the BATCH 3 RESOLVED entry above.
 - **`grocery` remains the only installable system.** The other eight are listed and honest about it: their card offers a request, not an install.
 
 ### Verified in a real browser, through the public hostname, on a throwaway org — 14/14
@@ -2616,3 +2772,63 @@ Result: 1200 tenant rows, 136 organizations, 4 vault folders, 5 registry entries
 Two more registry-only orphans were also removed: five `verify-<timestamp>` entries. Nothing in `scripts/`, `tests/` or `src/` creates that prefix any more (grep-verified), so they were provably stale output from earlier manual runs; the pattern is now `^verify-\d+$` rather than a hand-picked list.
 
 One pre-existing inconsistency, **not** touched: `haitham` exists as an organization with a vault folder but has no `orginazition/_registry/registry.json` entry.
+
+## 2026-10-06 - DENTAL 3D WAS BROKEN UNDER A MOUNT, AND THE BELL WAS PAINTED ON
+
+### Requested
+Theme, sidenav and 3D on the Dental system, then notifications. Theme and sidenav were dropped from scope by the user after both were proven working; 3D and notifications were built.
+
+### Theme and sidenav: no code touched, on purpose
+Measured in a real browser, not by reading code. Theme: a real click on the toggle moved `dark` from `true` to `false` and wrote `theme=light` to `localStorage`, zero console errors. Sidenav: 20 links, correct Dental headings after navigation, zero 4xx. Both behave correctly; changing them would have been a guess at a complaint that did not reproduce.
+
+### 3D: the file was never missing, the URL was
+`dental-chart-3d.tsx` requested `"/model/human_teeth.glb"` - root-absolute. Under any `basePath` the browser asks the domain root for that path, which the org's own routes answer, so the load failed while the file sat untouched in `public/model/`. The asset is byte-identical in all three trees (1,547,688 bytes, md5 `b7ccf29fdbcc`).
+
+**A second trap, and this one nearly shipped a false pass:** `Copy-Item` treats `[` and `]` in a path as wildcards, so propagating `src/app/model/[...path]/route.ts` with `Copy-Item (Join-Path $src $f) $dst` **silently copied nothing** - no error, no warning. The demo's route handler was therefore absent while the 3D check still "passed", because asserting only that a canvas existed cannot tell a rendered model from a failed load. Two habits follow, and both caught the real problem here:
+1. Propagate with `Copy-Item -LiteralPath`, then **verify presence and hash per file** instead of trusting the copy loop's exit status.
+2. Assert the artifact, not the UI around it - status, byte count, magic bytes and content type from the exact URL the client builds.
+
+**A trap worth remembering:** an unauthenticated request to that URL is answered by `src/proxy.ts` with a redirect to `/login`, so "404" and "auth redirect" are indistinguishable without a session. An earlier probe misread this as a missing asset. Authenticated browser testing was required to tell the two apart.
+
+Fixed mount-agnostically: `src/app/model/[...path]/route.ts` streams the GLB out of the app's own `public/model/`, and `src/lib/model-asset.ts` is the exact one-file allowlist in front of it (any other filename, or a `..` segment, is refused). `MODEL_URL` now prefixes `process.env.__NEXT_BASE_PATH`, the build-time substitution of the mount, which is why the fix needed a rebuild rather than only an edit.
+
+### Notifications: the bell was decorative
+`app-shell.tsx` rendered a hardcoded `bg-destructive` dot - red for a user with nothing unread, inert for a user with a hundred, with no count and no click target. The `Notification` table had existed in the schema since initialisation with **zero** producers, so it had never held a row.
+
+Built server-first, with no new API routes:
+- `lib/notifications.ts` - list / count / mark, every read and write scoped by `userId`; `notifyBranchStaff` resolves the branch's staff and excludes the actor.
+- Producers: new patient (`lib/actions/patients.ts`), new appointment (`lib/actions/appointments.ts`).
+- `lib/actions/notifications.ts` - mark-all-read behind `requireAuth()`.
+- `app/(app)/layout.tsx` loads them server-side; `NotificationBell` renders the count and a dropdown.
+
+### Verified
+- `npm test` **750/750** across 59 files; root and `system/dental` typechecks clean; Dental's own ESLint clean on all 10 touched files; `next build --webpack` clean in `system/dental`, with `/model/[...path]` registered in the route table.
+- 19 new tests: `tests/core/dental-notifications.test.ts` (12) and `tests/core/dental-model-asset.test.ts` (7) - branch scoping, actor exclusion, per-user isolation of mark-read, and path traversal.
+- 3D, demo at `/demo/dental`, authenticated as a seeded user. Fetched from **inside** the app, same session, same origin: the old root-absolute `/model/human_teeth.glb` returns **404**, and `/demo/dental/model/human_teeth.glb` returns **200**, 1,547,688 bytes, glTF magic `676c5446`, `content-type: model/gltf-binary`. That pairing is the proof: same session, same origin, only the URL differs.
+- Traversal is refused, not merely absent: `/model/../package.json`, `/model/..%2fpackage.json` and `/model/human_teeth.glb/../../package.json` all answer 404, and a name outside the allowlist (`human_teeth.glb.map`) answers 404.
+- Notifications, same session: one unread row → the badge rendered `1` → the dropdown opened with the row and a mark-all control → after mark-all the badge cleared **and** the database went 1 → 0 unread. The clearing was the server action, not a client lie.
+- Producer end-to-end: a second user in the same branch created a patient through the real dialog form, and the first user received `IMPORTANT_PATIENT_EVENT` with the bilingual title, the patient's name in the body and a `/patients/<id>` link. Actor excluded, 0 page errors. The probe patient and probe rows were deleted afterwards.
+
+### Not verified, and why it matters
+The org clone still serves its previous bundle. Its stored `sourceHash` (`16f3dbd8…`) no longer matches its sources (`dd848506…`), so the supervisor **will** rebuild it with the org's injected env the next time `/p967770416171/dental` is opened. That path could not be exercised here: the platform session is Better Auth and database-backed, so it cannot be minted without real credentials, and the public URL answers `524`.
+
+Rebuild the clone by opening it, never by hand. `npx next build` inside the clone fails on Turbopack - `Symlink [project]/node_modules is invalid, it points out of the filesystem root`. Its own `build` script already does `prisma generate && next build --webpack`, and the supervisor runs that script, which is also where `DATABASE_URL` comes from (the clone has no `.env`).
+
+### Orphans & pending
+- **A notification raised by someone else while the page stays open is not shown until the next load.** `NotificationBell` seeds `useState` from its props at mount and never re-seeds; mark-read works because it updates local state directly. Re-syncing from refreshed server props was deliberately left out rather than faked.
+- **Org clones are frozen snapshots and never self-update.** `ensureOrgSystemSource` returns early when `join(cwd, "package.json")` already exists, so the supervisor only ever *clones a missing* system; it never re-syncs an existing one. Every change to `system/<slug>` must be propagated by hand to each live org folder. Exactly one Dental clone exists on this machine (`orginazition/p967770416171/systems/dental`) and all 10 files are now byte-identical to `system/dental`.
+- `orginazition/p967770416171/systems.json` still lists only grocery.
+- A notification body has no Arabic counterpart when the underlying entity has no Arabic name column - `Patient` has none - so `bodyAr` is null and the UI falls back to English. Honest fallback, not a translation.
+
+### Follow-up, same day: the demo was being served to the public from a dev server
+`wss://bosc.dpdns.org/demo/dental/_next/hmr` connected to nothing, as the browser reported at `web-socket.ts:50`. Cause: the production platform (`:3100`, behind Cloudflare) reverse-proxies `/demo/dental` to `localhost:3106` (from `resolveDemoUpstreams`, no `DENTAL_URL` override), and a **`next dev`** server was occupying that port. Dev mode injects the HMR client; the edge does not forward WebSockets, so the connect failed. The console line was cosmetic, but it was the visible symptom of a real defect: **the public mount was serving a development build** (Turbopack dev chunks, `devtooling`, unoptimized, `next-dev` markers). All other demo mounts were 404/500 - dental was the only one running anywhere, and it was running in the wrong mode.
+
+Fix, by request: built `demo-systems/dental` with `next build --webpack` and replaced the dev server on `:3106` with `next start -p 3106`. The platform now serves production HTML.
+
+### Verified after the fix
+- `:3100/demo/dental/login` -> 200, 17,704 bytes, production webpack chunks; `next-dev` and HMR client both gone.
+- With a real session through the platform mount: badge `1`, dropdown opens, mark-all flips the database 1 -> 0; `/demo/dental/model/human_teeth.glb` -> 200 / 1,547,688 bytes / glTF magic `676c5446`; the old root-absolute `/model/...` still 404; 0 page errors. **This is the first verification of the 3D + notifications work under a production mount.**
+
+### Orphans & pending (additions)
+- `npm run dev`'s `dev:dental` can no longer bind `:3106` while a production dental owns it; `dev.ts` treats demo scripts as non-critical, so the dev environment still boots. A `DENTAL_URL` override pointing dev at a separate port is the durable answer, left as a follow-up.
+- The production dental on `:3106` was started with a manual detached `Start-Process`; it is not yet supervised, so it will not survive a reboot by itself.

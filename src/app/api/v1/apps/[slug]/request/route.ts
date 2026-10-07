@@ -4,7 +4,7 @@ import { requireTenantContext } from "@/core/tenancy/context";
 import { requirePermission } from "@/core/db/tenant-guard";
 import { installState, openRouteForSlug, systemKind } from "@/core/systems/catalog";
 import { writeAuditLog } from "@/core/audit/service";
-import { requestSystemForTenant } from "@/core/apps/service";
+import { requestSystemForTenant, withdrawSystemRequest } from "@/core/apps/service";
 import { listSystemSources } from "@/core/org-vault/system-sources";
 
 /**
@@ -25,6 +25,13 @@ import { listSystemSources } from "@/core/org-vault/system-sources";
  *  - anything else: a pending `organizationAppRequest` (idempotent; a previously
  *    rejected request is reopened).
  *  - disabled systems (`isActive: false`): rejected — admin kill-switch.
+ *
+ * DELETE /api/v1/apps/[slug]/request
+ *
+ * The same card's "إلغاء الطلب" action: the member who queued a request withdraws
+ * it by deleting the pending row, so the card returns to "installable" without
+ * waiting for an admin. Gated on the same `systems:install` permission that filed
+ * the request; an already-installed or never-requested system 404s.
  */
 export const POST = withRoute(
   "v1.apps.request",
@@ -73,5 +80,28 @@ export const POST = withRoute(
       requestId: result.requestId,
       created: result.created,
     });
+  },
+);
+
+/**
+ * Withdraw the active org's pending request for one system.
+ *
+ * It only ever deletes a `pending` row, so an approved install cannot be
+ * undone through this route — uninstalling is a separate, `systems:manage`-
+ * gated action with its own audit trail.
+ */
+export const DELETE = withRoute(
+  "v1.apps.withdraw",
+  async (request, ctx: { params: Promise<{ slug: string }> }) => {
+    const { slug } = await ctx.params;
+    const ctxT = await requireTenantContext(request);
+    requirePermission(ctxT.tenant, { systems: ["install"] });
+
+    const result = await withdrawSystemRequest(ctxT.tenant.organizationId, {
+      slug,
+      userId: ctxT.tenant.userId,
+    });
+
+    return ok(result);
   },
 );

@@ -25,6 +25,8 @@ const eslintConfig = defineConfig([
     "public/celia-main/**",
     "public/Hospital--main/**",
     "public/pharmacy/**",
+    // System templates (templates + clones policy): customer-owned code with own toolchain
+    "system/**",
   ]),
 ]);
 

@@ -4,6 +4,7 @@ import {
   isDemoSystem,
   openRouteForOrgSlug,
   openRouteForSlug,
+  orphanedInstalledSlugs,
   systemKind,
   catalogAppSchema,
   SEEDABLE_DEMO_SLUGS,
@@ -144,6 +145,36 @@ describe("installState", () => {
 
   it("may be reused idempotently for real systems once requested", () => {
     expect(installState({ appIsActive: true, installed: false, isDemo: false })).toBe("installable");
+  });
+
+  // Removing a system's source makes `/{org}/{system}` answer 404, so an
+  // install that cannot be served must not read as `installed`.
+  it("reports an install whose source was removed as unavailable", () => {
+    expect(installState({ appIsActive: true, installed: true, sourceMissing: true })).toBe(
+      "unavailable",
+    );
+  });
+
+  it("keeps a normal install installed when its source is present", () => {
+    expect(installState({ appIsActive: true, installed: true, sourceMissing: false })).toBe(
+      "installed",
+    );
+  });
+});
+
+describe("orphanedInstalledSlugs", () => {
+  it("returns installed slugs with no source, deduped and sorted", () => {
+    expect(
+      orphanedInstalledSlugs(["b", "a", "b", "c"], ["a", "c"]),
+    ).toEqual(["b"]);
+  });
+
+  it("returns nothing when every install still has its source", () => {
+    expect(orphanedInstalledSlugs(["a", "b"], ["a", "b", "c"])).toEqual([]);
+  });
+
+  it("ignores a source with no install", () => {
+    expect(orphanedInstalledSlugs([], ["a"])).toEqual([]);
   });
 });
 

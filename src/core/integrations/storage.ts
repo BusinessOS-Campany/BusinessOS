@@ -41,9 +41,29 @@ class LocalStorage implements StorageProvider {
 
   async write(relativePath: string, data: Buffer): Promise<string> {
     const fullPath = this.resolve(relativePath);
+    const tmpPath = `${fullPath}.${process.pid}.${Date.now()}.tmp`;
     await mkdir(dirname(fullPath), { recursive: true });
-    await writeFile(fullPath, data);
-    return relativePath;
+    try {
+      await writeFile(tmpPath, data);
+      try {
+        await require("node:fs/promises").rename(tmpPath, fullPath);
+      } catch (err: any) {
+        if (err && err.code === "EXDEV") {
+          await require("node:fs/promises").copyFile(tmpPath, fullPath);
+          try {
+            await require("node:fs/promises").unlink(tmpPath);
+          } catch {}
+        } else {
+          throw err;
+        }
+      }
+      return relativePath;
+    } catch (err) {
+      try {
+        await require("node:fs/promises").unlink(tmpPath);
+      } catch {}
+      throw err;
+    }
   }
 
   async read(relativePath: string): Promise<Buffer> {

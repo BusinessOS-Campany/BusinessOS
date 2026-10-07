@@ -18,6 +18,7 @@ import { ensureOrgDatabase } from "@/core/org-vault/database";
 import { cloneSystemForOrg, orgSystemDir, type CloneResult } from "@/core/org-vault/system-clone";
 import { orgVaultPaths } from "@/core/org-vault/paths";
 import { isBuildCurrent, needsDatabaseSetup, shouldRecheckHealth, canAdoptPersistedRuntime, healthProbeDelays, BOOT_READY_TIMEOUT_MS } from "./build-state";
+import { createBootGate } from "./boot-gate";
 import { syncCredentialsOnBoot } from "./sync";
 import { logger } from "@/core/logging/logger";
 
@@ -110,6 +111,18 @@ export interface OrgRuntime {
 const running = new Map<string, OrgRuntime>();
 /** Serialises boot per org+system so two requests cannot spawn two processes. */
 const booting = new Map<string, Promise<OrgRuntime>>();
+
+/**
+ * Bounds how many org runtimes BUILD at once, across every org. Per-org
+ * serialisation above keeps one org from double-booting; this keeps fifty
+ * first-opens in one minute from starting fifty builds at once. The bounds and
+ * the queue live in `boot-gate.ts`, where they are unit-tested.
+ */
+const bootGate = createBootGate({
+  max: Number(process.env.SYSTEM_RUNTIME_BOOT_CONCURRENCY ?? 2),
+  maxQueue: Number(process.env.SYSTEM_RUNTIME_BOOT_QUEUE ?? 32),
+  timeoutMs: Number(process.env.SYSTEM_RUNTIME_BOOT_QUEUE_TIMEOUT_MS ?? 120_000),
+});
 
 function key(orgSlug: string, systemSlug: string): string {
   return `${orgSlug}::${systemSlug}`;
@@ -718,7 +731,17 @@ export async function ensureOrgRuntime(input: {
   const inFlight = booting.get(mapKey);
   if (inFlight) return inFlight;
 
-  const promise = boot(input.orgId, input.orgSlug, input.systemSlug, input.basePath, input.gatewaySecret);
+  const promise = (async () => {
+    // Boot happens inside a global slot, so concurrent first-opens queue rather
+    // than all spawning `next build` at once. The slot is held for the whole
+    // boot and released even on failure.
+    await bootGate.acquire();
+    try {
+      return await boot(input.orgId, input.orgSlug, input.systemSlug, input.basePath, input.gatewaySecret);
+    } finally {
+      bootGate.release();
+    }
+  })();
   booting.set(mapKey, promise);
   try {
     return await promise;
@@ -848,6 +871,9 @@ export function peekOrgRuntime(orgId: string, systemSlug: string): OrgRuntime | 
 export function __resetRuntimeState(): void {
   running.clear();
   booting.clear();
+  // Drop the build queue and its slots too: a test that reset state must not
+  // inherit a slot held by the previous test, nor leave a waiter hanging.
+  bootGate.reset(new Error("Runtime state was reset"));
 }
 
 export { sharedInstallDir, findFreePort };

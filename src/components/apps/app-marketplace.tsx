@@ -138,12 +138,12 @@ async function requestSystem(
  * into an app runs on first open and takes minutes. Rather than send the customer
  * to a page that will sit blank for two minutes, the card asks this and waits.
  */
-async function pollInstall(slug: string): Promise<{ ok: boolean; state?: string; route?: string | null }> {
+async function pollInstall(slug: string): Promise<{ ok: boolean; state?: string; route?: string | null; error?: string | null }> {
   try {
     const res = await fetch(`/api/v1/apps/${slug}/install`, { cache: "no-store" });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false };
-    return { ok: true, state: json?.data?.state, route: json?.data?.route ?? null };
+    return { ok: true, state: json?.data?.state, route: json?.data?.route ?? null, error: json?.data?.error ?? null };
   } catch {
     return { ok: false };
   }
@@ -180,7 +180,7 @@ async function awaitReady(
   onState: (slug: string, state: MarketplaceEntry["state"], route: string | null) => void,
   onToast: (text: string, ok: boolean) => void,
   onReady: (route: string) => void,
-  messages: { ready: string; timeout: string },
+  messages: { ready: string; timeout: string; failed: string },
 ): Promise<void> {
   const deadline = Date.now() + 20 * 60_000;
   let delay = 2000;
@@ -200,6 +200,13 @@ async function awaitReady(
       onState(slug, "installed", res.route ?? null);
       onToast(messages.ready, true);
       if (res.route) onReady(res.route);
+      return;
+    }
+    if (res.state === "failed") {
+      // The warm build was attempted at install time and failed. Stop waiting
+      // and say so; a spinner that never resolves hides the real problem.
+      onState(slug, "unavailable", null);
+      onToast(messages.failed, false);
       return;
     }
   }
@@ -355,7 +362,7 @@ export function AppMarketplace({
   // The two strings the poll can ever show, resolved once per locale so the poll
   // effect below does not depend on the dictionary helper.
   const prepareMessages = useMemo(
-    () => ({ ready: d("readyFlash"), timeout: d("preparingTimeout") }),
+    () => ({ ready: d("readyFlash"), timeout: d("preparingTimeout"), failed: d("preparingFailed") }),
     // `d` is `(key) => t(dict, prefix + key)`; it is stable for a given `dict`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dict, locale],

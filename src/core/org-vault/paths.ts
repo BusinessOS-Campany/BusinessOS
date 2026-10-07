@@ -246,8 +246,18 @@ export function pathSize(target: string): number {
   const stat = statSync(target, { throwIfNoEntry: false });
   if (!stat) return 0;
   if (!stat.isDirectory()) return stat.size;
-  for (const entry of readdirSync(target)) {
-    total += pathSize(join(target, entry));
+  const entries = readdirSync(target, { withFileTypes: true });
+  for (const entry of entries) {
+    const name = entry.name;
+    if (entry.isDirectory()) {
+      if (name === "node_modules" || name === ".next" || name === ".git") continue;
+      total += pathSize(join(target, name));
+      continue;
+    }
+    if (entry.isFile()) {
+      const statEntry = statSync(join(target, name));
+      total += statEntry.size;
+    }
   }
   return total;
 }
