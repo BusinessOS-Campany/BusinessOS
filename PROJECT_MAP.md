@@ -121,6 +121,27 @@ docker-compose.yml        # postgres:18 + pgadmin (redis commented out)
 
 ---
 
+## 2026-10-08 — THE LIVE DENTAL DEMO STILL SHOWED ENGLISH ON THE DASHBOARD (implemented, verified)
+
+**The report:** `https://bosc.dpdns.org/demo/dental/dashboard` logged in with an Arabic sidebar but English widgets ("Total Patients", "Today's Appointments", raw status "SCHEDULED").
+
+### Why it was stale
+- The demo (`demo-systems/dental`, served at `:3106` behind the public origin) was running a **10-06 4:49 PM build** whose `.next` predated the dashboard localization.
+- Worse, `demo-systems/dental/src` had **drifted 117 files** behind `system/dental/src` (robocopy dry-run: 117 newer, 0 extras) — the demo was serving pre-i18n code, not a build artifact problem alone.
+
+### The fix
+1. Mirrored `system\dental\src` → `demo-systems\dental\src` with `robocopy /MIR` (117 files, no extras deleted; demo's newer `lib/prisma.ts` was preserved conservatively — it turned out identical to system's).
+2. **Hidden DB bug surfaced by the rebuild:** the fresh build crashed on login with `The table public.User does not exist`. PrismaPg's `schema` must be passed in the **second** argument — `new PrismaPg({ connectionString }, { schema })` — and the dental `lib/prisma.ts` was passing it as a pool config key, so the adapter's `getConnectionInfo()` returned `undefined` and Prisma qualified every table as `public.*`. Fixed in both trees to read `DATABASE_SCHEMA ?? URL ?schema` (the demo DB lives in the `dental` schema). Verified: `user.count=9`, `appointment.count=19`.
+3. Dashboard status pie chart was leaking raw codes in the legend (`name: s.status`) and hardcoded English in `StatusChart` ("No appointment data", tooltip "Appointments"). Fed `statusLabel(t, s.status)` and moved both strings to i18n (`dashboard.noChartData`, `dashboard.appointments`, en+ar).
+4. Rebuilt `demo-systems/dental` (`next build --webpack`), restarted `:3106`.
+
+### Verification
+- Local + public puppeteer (Chrome, `dc_lang=ar`, login `admin@dentalclinic.ye`): `lang="ar" dir="rtl"` on login AND dashboard; widgets read `إجمالي المرضى ١٥`, `مواعيد اليوم 3 إجمالي اليوم`, `إيرادات هذا الشهر 110,000 ريال`, `حالة مواعيد اليوم`, etc. No English besides proper names (`Mariam Al-Awlaqi`, `Dr. Omar Ba-Saleh`) and the admin email/display name.
+- Dental gates: `tsc --noEmit` 0, `eslint src/**/*.{ts,tsx}` 0.
+- Committed `ddfa73d` (72 files, system + demo parity), pushed to `origin/main` (auto-push hook).
+
+---
+
 ## 2026-10-06 — THE DENTAL 2D CHART BROKE OUT OF ITS CONTAINER ON PHONES (implemented, verified)
 
 **The report:** the tooth chart on the dental-chart page overflowed its card to the right on a phone — the page over-scrolled horizontally and teeth were cropped at both edges.
