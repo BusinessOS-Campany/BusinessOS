@@ -581,6 +581,8 @@ const en = {
     viewAll: "View all",
     noAppointmentsToday: "No appointments scheduled for today.",
     unassigned: "Unassigned",
+    noChartData: "No appointment data",
+    appointments: "Appointments",
   },
   ui: {
     allStatuses: "All statuses",
@@ -1605,6 +1607,8 @@ const ar: typeof en = {
     viewAll: "عرض الكل",
     noAppointmentsToday: "لا توجد مواعيد مجدولة اليوم.",
     unassigned: "غير معيّن",
+    noChartData: "لا توجد بيانات مواعيد",
+    appointments: "مواعيد",
   },
   statuses: {
     scheduled: "مجدول",

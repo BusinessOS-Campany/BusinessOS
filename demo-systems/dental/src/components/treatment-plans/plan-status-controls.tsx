@@ -3,6 +3,7 @@
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useI18n } from "@/components/lang-provider"
+import { statusLabel } from "@/lib/i18n"
 import { updateTreatmentPlanStatusAction, updatePlanProcedureStatusAction } from "@/lib/actions/treatment-plans"
 
 const PLAN_STATUSES = [
@@ -23,10 +24,9 @@ interface Props {
 }
 
 export function PlanStatusControls({ planId, status, procedures }: Props) {
-  const { locale } = useI18n()
+  const { t } = useI18n()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   const onChangePlan = (next: string) => {
     startTransition(async () => {
@@ -44,7 +44,7 @@ export function PlanStatusControls({ planId, status, procedures }: Props) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-medium text-muted-foreground">{ar ? "حالة الخطة:" : "Plan status:"}</span>
+        <span className="text-xs font-medium text-muted-foreground">{t.page.planStatus}</span>
         <select
           value={status}
           onChange={(e) => onChangePlan(e.target.value)}
@@ -53,7 +53,7 @@ export function PlanStatusControls({ planId, status, procedures }: Props) {
         >
           {PLAN_STATUSES.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {statusLabel(t, s)}
             </option>
           ))}
         </select>
@@ -69,7 +69,7 @@ export function PlanStatusControls({ planId, status, procedures }: Props) {
           >
             {PROC_STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {statusLabel(t, s)}
               </option>
             ))}
           </select>

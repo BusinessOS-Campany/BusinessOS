@@ -35,12 +35,11 @@ interface Props {
 }
 
 export function SupplierFormDialog({ trigger, existing = null }: Props) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -54,7 +53,7 @@ export function SupplierFormDialog({ trigger, existing = null }: Props) {
         router.refresh()
         setOpen(false)
       } else {
-        setError(ar ? "حدث خطأ أثناء الحفظ" : t.common.error)
+        setError(t.common.error)
       }
     })
   }
@@ -66,7 +65,7 @@ export function SupplierFormDialog({ trigger, existing = null }: Props) {
         <form onSubmit={onSubmit} className="grid gap-4 py-2">
           <DialogHeader>
             <DialogTitle>{existing ? t.suppliers.editSupplier : t.suppliers.newSupplier}</DialogTitle>
-            <DialogDescription>{ar ? "بيانات مورد المواد والمعدات" : "Supplier contact details"}</DialogDescription>
+            <DialogDescription>{t.dialogs.supplierHint}</DialogDescription>
           </DialogHeader>
 
           {existing && <input type="hidden" name="id" value={existing.id} />}

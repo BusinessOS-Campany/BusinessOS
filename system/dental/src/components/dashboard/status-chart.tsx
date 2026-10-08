@@ -2,6 +2,7 @@
 
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useI18n } from "@/components/lang-provider"
 
 interface StatusChartProps {
   data: { name: string; value: number; color: string }[]
@@ -9,6 +10,7 @@ interface StatusChartProps {
 }
 
 export function StatusChart({ data, title }: StatusChartProps) {
+  const { t } = useI18n()
   const total = data.reduce((s, d) => s + d.value, 0)
 
   return (
@@ -19,7 +21,7 @@ export function StatusChart({ data, title }: StatusChartProps) {
       <CardContent>
         {total === 0 ? (
           <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">
-            No appointment data
+            {t.dashboard.noChartData}
           </div>
         ) : (
           <div className="h-[260px]">
@@ -42,7 +44,7 @@ export function StatusChart({ data, title }: StatusChartProps) {
                 <Tooltip
                   formatter={(value) => [
                     `${Number(value ?? 0)} (${total ? ((Number(value ?? 0) / total) * 100).toFixed(1) : 0}%)`,
-                    "Appointments",
+                    t.dashboard.appointments,
                   ]}
                   contentStyle={{
                     borderRadius: "8px",

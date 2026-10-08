@@ -36,7 +36,6 @@ export function StockAdjustDialog({ trigger, productId, productName, currentQuan
   const [type, setType] = useState("STOCK_IN")
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -48,7 +47,7 @@ export function StockAdjustDialog({ trigger, productId, productName, currentQuan
         router.refresh()
         setOpen(false)
       } else {
-        setError(ar ? "تعذر تنفيذ حركة المخزون (تحقق من الكمية)" : "Could not record movement (check quantity)")
+        setError(t.dialogs.stockMovementFailed)
       }
     })
   }
@@ -61,7 +60,7 @@ export function StockAdjustDialog({ trigger, productId, productName, currentQuan
           <DialogHeader>
             <DialogTitle>{t.inventory.adjustStock}</DialogTitle>
             <DialogDescription>
-              {ar ? `${productName} — المخزون الحالي: ${currentQuantity}` : `${productName} — Current stock: ${currentQuantity}`}
+              {t.dialogs.stockCurrent.replace("{name}", productName).replace("{quantity}", currentQuantity)}
             </DialogDescription>
           </DialogHeader>
 
@@ -91,7 +90,7 @@ export function StockAdjustDialog({ trigger, productId, productName, currentQuan
 
           <div className="space-y-1.5">
             <Label>{t.inventory.notes}</Label>
-            <Textarea name="notes" rows={2} placeholder={ar ? "ملاحظات الحركة…" : "Movement notes…"} />
+            <Textarea name="notes" rows={2} placeholder={t.dialogs.stockNotesPh} />
           </div>
 
           {error && (

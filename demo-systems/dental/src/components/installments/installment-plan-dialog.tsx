@@ -42,7 +42,7 @@ let rowSeq = 3000
 const newRow = (): Row => ({ rowId: `inst-${++rowSeq}` })
 
 export function InstallmentPlanDialog({ trigger, patients, invoices }: Props) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [patientId, setPatientId] = useState("")
@@ -50,7 +50,6 @@ export function InstallmentPlanDialog({ trigger, patients, invoices }: Props) {
   const [rows, setRows] = useState<Row[]>([newRow()])
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   const addRow = () => setRows((prev) => [...prev, newRow()])
   const removeRow = (rowId: string) => setRows((prev) => prev.filter((r) => r.rowId !== rowId))
@@ -59,7 +58,7 @@ export function InstallmentPlanDialog({ trigger, patients, invoices }: Props) {
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!patientId) {
-      setError(ar ? "حدد المريض أولاً" : t.common.select)
+      setError(t.common.select)
       return
     }
     setError(null)
@@ -73,9 +72,9 @@ export function InstallmentPlanDialog({ trigger, patients, invoices }: Props) {
         setInvoiceId("")
         setRows([newRow()])
       } else if (res.error === "duplicate_invoice") {
-        setError(ar ? "للفاتورة خطة سداد موجودة" : "This invoice already has a payment plan")
+        setError(t.dialogs.installmentExistsPlan)
       } else {
-        setError(ar ? "حدث خطأ أثناء الحفظ" : t.common.error)
+        setError(t.common.error)
       }
     })
   }
@@ -87,7 +86,7 @@ export function InstallmentPlanDialog({ trigger, patients, invoices }: Props) {
         <form onSubmit={onSubmit} className="grid gap-4 py-2">
           <DialogHeader>
             <DialogTitle>{t.installments.newPlan}</DialogTitle>
-            <DialogDescription>{ar ? "خطة سداد بأقساط موزعة على تواريخ" : "A repayment plan split into installments with due dates"}</DialogDescription>
+            <DialogDescription>{t.dialogs.installmentHint}</DialogDescription>
           </DialogHeader>
 
           <input type="hidden" name="patientId" value={patientId} />
@@ -110,7 +109,7 @@ export function InstallmentPlanDialog({ trigger, patients, invoices }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <Label>{ar ? "الفاتورة (اختياري)" : "Invoice (optional)"}</Label>
+            <Label>{t.dialogs.installmentInvoiceOptional}</Label>
             <Select value={invoiceId} onValueChange={setInvoiceId}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder={t.common.select} />

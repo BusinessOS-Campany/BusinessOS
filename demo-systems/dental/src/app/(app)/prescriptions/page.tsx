@@ -111,7 +111,7 @@ export default async function PrescriptionsPage({ searchParams }: { searchParams
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t.prescriptions.title}</h1>
-          <p className="text-sm text-muted-foreground">{total} records</p>
+          <p className="text-sm text-muted-foreground">{t.page.totalPrescriptions.replace("{count}", String(total))}</p>
         </div>
         {user.permissions.includes("prescriptions:create") && (
           <PrescriptionFormDialog
@@ -133,8 +133,8 @@ export default async function PrescriptionsPage({ searchParams }: { searchParams
             <Input type="search" name="q" defaultValue={q} placeholder={t.common.search} className="w-full" />
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex">
-            <Input type="date" name="from" defaultValue={from} aria-label="from" className="sm:w-40" />
-            <Input type="date" name="to" defaultValue={to} aria-label="to" className="sm:w-40" />
+            <Input type="date" name="from" defaultValue={from} aria-label={t.common.from} className="sm:w-40" />
+            <Input type="date" name="to" defaultValue={to} aria-label={t.common.to} className="sm:w-40" />
             <Button type="submit" variant="outline">
               {t.common.filter}
             </Button>

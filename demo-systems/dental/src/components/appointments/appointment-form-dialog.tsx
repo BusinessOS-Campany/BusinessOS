@@ -39,7 +39,7 @@ interface Props {
 }
 
 export function AppointmentFormDialog({ trigger, defaultDate, options }: Props) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const [state, formAction, isPending] = useActionState<AppointmentFormState, FormData>(
     createAppointmentAction,
     {}
@@ -78,7 +78,7 @@ export function AppointmentFormDialog({ trigger, defaultDate, options }: Props) 
           <DialogHeader>
             <DialogTitle>{t.appointments.newAppointment}</DialogTitle>
             <DialogDescription>
-              {locale === "ar" ? "حدد المريض والطبيب والتوقيت" : "Select patient, dentist and timing"}
+              {t.dialogs.appointmentHint}
             </DialogDescription>
           </DialogHeader>
 
@@ -129,7 +129,7 @@ export function AppointmentFormDialog({ trigger, defaultDate, options }: Props) 
                   <SelectContent>
                     {APPOINTMENT_TYPES.map((at) => (
                       <SelectItem key={at.value} value={at.value}>
-                        {locale === "ar" ? at.ar : at.en}
+                        {t.appointmentTypes[at.value as keyof typeof t.appointmentTypes] ?? at.value}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -174,18 +174,14 @@ export function AppointmentFormDialog({ trigger, defaultDate, options }: Props) 
             {errText("endTime") && (
               <p className="text-xs text-destructive">
                 {errText("endTime") === "END_BEFORE_START"
-                  ? locale === "ar"
-                    ? "وقت الانتهاء يجب أن يكون بعد وقت البدء"
-                    : "End time must be after start time"
+                  ? t.dialogs.appointmentEndAfterStart
                   : t.common.required}
               </p>
             )}
 
             {state.error === "conflict" && (
               <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {locale === "ar"
-                  ? "هذا الكرسي محجوز في هذا التوقيت"
-                  : "This chair is already booked for that time slot"}
+                {t.dialogs.appointmentChairBooked}
               </p>
             )}
             {state.error && state.error !== "invalid" && state.error !== "conflict" && (

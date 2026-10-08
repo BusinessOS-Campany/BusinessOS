@@ -1,7 +1,6 @@
 import { requirePermission } from "@/lib/dal"
 import { prisma } from "@/lib/prisma"
-import { cookies } from "next/headers"
-import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
 import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ClinicSettingsForm, type ClinicSettings } from "@/components/settings/clinic-settings-form"
@@ -10,8 +9,7 @@ export const dynamic = "force-dynamic"
 
 export default async function SettingsPage() {
   const user = await requirePermission("settings:view")
-  const cookieStore = await cookies()
-  const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t, locale } = await getI18n()
   const ar = locale === "ar"
 
   const clinic = user.clinicId
@@ -24,8 +22,8 @@ export default async function SettingsPage() {
   if (!clinic) {
     return (
       <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
-        <h1 className="text-2xl font-bold tracking-tight">{ar ? "الإعدادات" : "Settings"}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{ar ? "لا توجد عيادة مرتبطة بهذا الحساب" : "No clinic is linked to this account"}</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t.settings.title}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{t.page.noClinicLinked}</p>
       </div>
     )
   }
@@ -47,8 +45,8 @@ export default async function SettingsPage() {
   return (
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">{ar ? "الإعدادات" : "Settings"}</h1>
-        <p className="text-sm text-muted-foreground">{ar ? "بيانات العيادة والفروع" : "Clinic information and branches"}</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t.settings.title}</h1>
+        <p className="text-sm text-muted-foreground">{t.page.clinicInfoHint}</p>
       </div>
 
       {user.permissions.includes("clinic:manage") ? (
@@ -59,19 +57,19 @@ export default async function SettingsPage() {
         <Card>
           <CardContent className="grid gap-4 p-6 sm:grid-cols-2">
             <div>
-              <div className="text-sm text-muted-foreground">{ar ? "اسم العيادة" : "Clinic name"}</div>
+              <div className="text-sm text-muted-foreground">{t.settings.name}</div>
               <div className="mt-1 font-medium">{ar && clinic.nameAr ? clinic.nameAr : clinic.name}</div>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">{ar ? "الهاتف" : "Phone"}</div>
+              <div className="text-sm text-muted-foreground">{t.settings.phone}</div>
               <div className="mt-1 font-medium" dir="ltr">{clinic.phone ?? "—"}</div>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">{ar ? "المحافظة" : "Governorate"}</div>
+              <div className="text-sm text-muted-foreground">{t.settings.governorate}</div>
               <div className="mt-1 font-medium">{clinic.governorate ?? "—"}</div>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">{ar ? "المدينة" : "City"}</div>
+              <div className="text-sm text-muted-foreground">{t.settings.city}</div>
               <div className="mt-1 font-medium">{clinic.city ?? "—"}</div>
             </div>
           </CardContent>
@@ -82,17 +80,17 @@ export default async function SettingsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="px-6">{ar ? "الفروع" : "Branches"}</TableHead>
-              <TableHead>{ar ? "العنوان" : "Address"}</TableHead>
-              <TableHead>{ar ? "المحافظة / المدينة" : "Governorate / City"}</TableHead>
-              <TableHead>{ar ? "الهاتف" : "Phone"}</TableHead>
+              <TableHead className="px-6">{t.settings.branches}</TableHead>
+              <TableHead>{t.settings.address}</TableHead>
+              <TableHead>{t.page.governorateCity}</TableHead>
+              <TableHead>{t.settings.phone}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {clinic.branches.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="py-12 text-center text-sm text-muted-foreground">
-                  {ar ? "لا توجد فروع" : "No branches"}
+                  {t.page.noBranches}
                 </TableCell>
               </TableRow>
             ) : (

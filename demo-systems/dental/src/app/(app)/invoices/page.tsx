@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { getI18n } from "@/lib/i18n-server"
 
 type Params = { [key: string]: string | string[] | undefined }
 type SearchParams = Promise<Params>
@@ -30,6 +31,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Se
   const user = await requirePermission("invoices:view")
   const cookieStore = await cookies()
   const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t } = await getI18n()
   const ar = locale === "ar"
   const url: Params = (await searchParams) ?? {}
 
@@ -115,8 +117,8 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Se
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{ar ? "الفواتير" : "Invoices"}</h1>
-          <p className="text-sm text-muted-foreground">{total} {ar ? "فاتورة" : "invoices"}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t.nav.invoices}</h1>
+          <p className="text-sm text-muted-foreground">{t.page.totalInvoices.replace("{count}", String(total))}</p>
         </div>
         {user.permissions.includes("invoices:create") && (
           <InvoiceFormDialog
@@ -127,7 +129,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Se
             trigger={
               <Button>
                 <FilePlus2 className="h-4 w-4" />
-                {ar ? "فاتورة جديدة" : "New Invoice"}
+                {t.billing.newInvoice}
               </Button>
             }
           />
@@ -137,22 +139,22 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Se
       <Card className="overflow-hidden">
         <form method="GET" action="/invoices" className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
           <div className="flex-1">
-            <Input type="search" name="q" defaultValue={q} placeholder={ar ? "بحث برقم الفاتورة أو المريض…" : "Search invoice no or patient…"} className="w-full" />
+            <Input type="search" name="q" defaultValue={q} placeholder={t.page.searchInvoice} className="w-full" />
           </div>
           <select
             name="status"
             defaultValue={status}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="">{ar ? "كل الحالات" : "All statuses"}</option>
+            <option value="">{t.ui.allStatuses}</option>
             {INVOICE_STATUSES.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-          <Button type="submit" variant="outline">{ar ? "تصفية" : "Filter"}</Button>
+          <Button type="submit" variant="outline">{t.common.filter}</Button>
           {(q || status) && (
             <Button type="button" variant="ghost" asChild>
-              <Link href="/invoices">{ar ? "مسح" : "Clear"}</Link>
+              <Link href="/invoices">{t.common.clear}</Link>
             </Button>
           )}
         </form>
@@ -161,14 +163,14 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Se
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{ar ? "الرقم" : "Number"}</TableHead>
-                <TableHead>{ar ? "المريض" : "Patient"}</TableHead>
-                <TableHead>{ar ? "التاريخ" : "Date"}</TableHead>
-                <TableHead className="text-end">{ar ? "الإجمالي" : "Total"}</TableHead>
-                <TableHead className="text-end">{ar ? "المدفوع" : "Paid"}</TableHead>
-                <TableHead className="text-end">{ar ? "المتبقي" : "Remaining"}</TableHead>
-                <TableHead>{ar ? "الحالة" : "Status"}</TableHead>
-                <TableHead className="text-end">{ar ? "إجراءات" : "Actions"}</TableHead>
+                <TableHead>{t.page.no}</TableHead>
+                <TableHead>{t.patients.fullName}</TableHead>
+                <TableHead>{t.common.date}</TableHead>
+                <TableHead className="text-end">{t.common.total}</TableHead>
+                <TableHead className="text-end">{t.billing.paid}</TableHead>
+                <TableHead className="text-end">{t.billing.remaining}</TableHead>
+                <TableHead>{t.common.status}</TableHead>
+                <TableHead className="text-end">{t.common.actions}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -184,7 +186,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Se
                     <TableRow key={inv.id}>
                       <TableCell className="font-medium tabular-nums">
                         <Link href={`/invoices/${inv.id}`} className="hover:underline">{inv.invoiceNo}</Link>
-                        <p className="text-xs text-muted-foreground">{inv._count.payments} {ar ? "دفعة" : "payments"}</p>
+                        <p className="text-xs text-muted-foreground">{t.page.totalPayments.replace("{count}", String(inv._count.payments))}</p>
                       </TableCell>
                       <TableCell>
                         <Link href={`/patients/${inv.patient.id}`} className="hover:underline">{patientName}</Link>
@@ -202,9 +204,9 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Se
                       <TableCell className="text-end">
                         <div className="flex justify-end gap-1.5">
                           <Button variant="outline" size="sm" asChild>
-                            <Link href={`/invoices/${inv.id}`}>{ar ? "عرض" : "View"}</Link>
+                            <Link href={`/invoices/${inv.id}`}>{t.common.view}</Link>
                           </Button>
-                          <Button variant="outline" size="icon" className="h-8 w-8" asChild title={ar ? "طباعة" : "Print"}>
+                          <Button variant="outline" size="icon" className="h-8 w-8" asChild title={t.common.print}>
                             <Link href={`/print/invoices/${inv.id}`}>
                               <Printer className="h-3.5 w-3.5" />
                             </Link>

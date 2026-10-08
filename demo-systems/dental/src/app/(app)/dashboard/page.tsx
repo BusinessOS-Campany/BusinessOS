@@ -2,6 +2,8 @@ import { CalendarDays, Users, Wallet, Bell, ArrowRight } from "lucide-react"
 import Link from "next/link"
 import { requireAuth } from "@/lib/dal"
 import { prisma } from "@/lib/prisma"
+import { getI18n } from "@/lib/i18n-server"
+import { statusLabel } from "@/lib/i18n"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { RevenueChart } from "@/components/dashboard/revenue-chart"
 import { StatusChart } from "@/components/dashboard/status-chart"
@@ -26,6 +28,7 @@ function startOfToday(): Date {
 
 export default async function DashboardPage() {
   const user = await requireAuth()
+  const { t } = await getI18n()
   const branchId = user.branchId ?? undefined
 
   const today = startOfToday()
@@ -78,7 +81,7 @@ export default async function DashboardPage() {
     .sort((a, b) => a.month.localeCompare(b.month))
 
   const statusData = todayStats.map((s) => ({
-    name: s.status,
+    name: statusLabel(t, s.status),
     value: s._count._all,
     color: STATUS_COLORS[s.status] ?? "hsl(var(--muted))",
   }))
@@ -88,51 +91,51 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-2">
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Welcome back, {user.name}</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t.nav.dashboard}</h1>
+        <p className="text-sm text-muted-foreground">{t.dashboard.welcomeBack.replace("{name}", user.name)}</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-<KpiCard
-          title="Total Patients"
+        <KpiCard
+          title={t.dashboard.totalPatients}
           value={patientCount.toLocaleString()}
-          description="Active patients"
+          description={t.dashboard.activePatients}
           icon={<Users className="h-4 w-4 text-muted-foreground" />}
         />
         <KpiCard
-          title={"Today's Appointments"}
+          title={t.dashboard.todayAppointments}
           value={todayAppointments}
-          description={`${todayStats.reduce((s, e) => s + e._count._all, 0)} total today`}
+          description={t.dashboard.totalToday.replace("{count}", String(todayStats.reduce((s, e) => s + e._count._all, 0)))}
           icon={<CalendarDays className="h-4 w-4 text-muted-foreground" />}
         />
         <KpiCard
-          title="Revenue This Month"
+          title={t.dashboard.revenueThisMonth}
           value={formatCurrency(Number(revenueThisMonth._sum.amount ?? 0))}
-          description="Collected payments"
+          description={t.dashboard.collectedPayments}
           icon={<Wallet className="h-4 w-4 text-muted-foreground" />}
         />
         <KpiCard
-          title="Outstanding Balance"
+          title={t.dashboard.outstandingBalance}
           value={formatCurrency(outstanding)}
-          description="Unpaid invoices"
+          description={t.dashboard.unpaidInvoices}
           icon={<Bell className="h-4 w-4 text-muted-foreground" />}
         />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <RevenueChart data={monthLabel} title="Monthly Revenue" />
+          <RevenueChart data={monthLabel} title={t.dashboard.monthlyRevenue} />
         </div>
-        <StatusChart data={statusData} title={"Today's Appointment Status"} />
+        <StatusChart data={statusData} title={t.dashboard.todayStatus} />
       </div>
 
       <div className="mt-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">{"Today's Appointments"}</CardTitle>
+            <CardTitle className="text-base">{t.dashboard.todayAppointments}</CardTitle>
             <Button variant="ghost" size="sm" asChild>
               <Link href="/appointments">
-                View all
+                {t.dashboard.viewAll}
                 <ArrowRight className="ms-1 h-3.5 w-3.5 rtl:rotate-180" />
               </Link>
             </Button>
@@ -140,7 +143,7 @@ export default async function DashboardPage() {
           <CardContent>
             {recentAppointments.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                No appointments scheduled for today.
+                {t.dashboard.noAppointmentsToday}
               </p>
             ) : (
               <div className="divide-y">
@@ -154,10 +157,10 @@ export default async function DashboardPage() {
                         {a.patient.firstName} {a.patient.lastName}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {a.dentist?.user?.name ?? "Unassigned"}
+                        {a.dentist?.user?.name ?? t.dashboard.unassigned}
                       </p>
                     </div>
-                    <Badge variant="outline">{a.status}</Badge>
+                    <Badge variant="outline">{statusLabel(t, a.status)}</Badge>
                   </div>
                 ))}
               </div>

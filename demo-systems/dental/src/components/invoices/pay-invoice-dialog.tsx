@@ -28,15 +28,22 @@ interface Props {
   remaining: number
 }
 
+const PAYMENT_METHOD_TO_KEY: Record<string, string> = {
+  CASH: "methodCash",
+  BANK_TRANSFER: "methodBankTransfer",
+  CARD: "methodCard",
+  MOBILE_WALLET: "methodMobileWallet",
+  OTHER: "methodOther",
+}
+
 export function PayInvoiceDialog({ trigger, patientId, patientNo, invoiceId, remaining }: Props) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [method, setMethod] = useState("CASH")
   const [amount, setAmount] = useState(remaining > 0 ? String(remaining) : "")
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -48,11 +55,11 @@ export function PayInvoiceDialog({ trigger, patientId, patientNo, invoiceId, rem
         router.refresh()
         setOpen(false)
       } else if (res.error === "amount_exceeds") {
-        setError(ar ? "المبلغ أكبر من المتبقي على الفاتورة" : "Amount exceeds invoice balance")
+        setError(t.dialogs.invoiceAmountExceeds)
       } else if (res.error === "invoice_closed") {
-        setError(ar ? "الفاتورة ملغاة أو مستردة" : "Invoice is closed")
+        setError(t.dialogs.invoiceClosed)
       } else {
-        setError(ar ? "حدث خطأ أثناء حفظ الدفعة" : t.common.error)
+        setError(t.common.error)
       }
     })
   }
@@ -64,7 +71,7 @@ export function PayInvoiceDialog({ trigger, patientId, patientNo, invoiceId, rem
         <form onSubmit={onSubmit} className="grid gap-4 py-2">
           <DialogHeader>
             <DialogTitle>{t.billing.recordPayment}</DialogTitle>
-            <DialogDescription>{ar ? `فاتورة ${invoiceId.slice(0, 8)}` : `Invoice ${invoiceId.slice(0, 8)}`} · {patientNo}</DialogDescription>
+            <DialogDescription>{t.billing.invoice} {invoiceId.slice(0, 8)} · {patientNo}</DialogDescription>
           </DialogHeader>
 
           <input type="hidden" name="patientId" value={patientId} />
@@ -93,9 +100,7 @@ export function PayInvoiceDialog({ trigger, patientId, patientNo, invoiceId, rem
               <SelectContent>
                 {PAYMENT_METHODS.map((m) => (
                   <SelectItem key={m} value={m}>
-                    {ar
-                      ? { CASH: "نقدي", BANK_TRANSFER: "تحويل بنكي", CARD: "بطاقة", MOBILE_WALLET: "محفظة جوال", OTHER: "أخرى" }[m]
-                      : { CASH: "Cash", BANK_TRANSFER: "Bank transfer", CARD: "Card", MOBILE_WALLET: "Mobile wallet", OTHER: "Other" }[m]}
+                    {t.billing[PAYMENT_METHOD_TO_KEY[m] as keyof typeof t.billing]}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -106,7 +111,7 @@ export function PayInvoiceDialog({ trigger, patientId, patientNo, invoiceId, rem
 
           <div className="space-y-1.5">
             <Label>{t.billing.reference}</Label>
-            <Input name="reference" placeholder={ar ? "رقم المرجع…" : "Reference…"} />
+            <Input name="reference" placeholder={t.payments.reference} />
           </div>
 
           {error && (

@@ -1,9 +1,8 @@
 import { requirePermission } from "@/lib/dal"
 import { prisma } from "@/lib/prisma"
-import { cookies } from "next/headers"
 import Link from "next/link"
 import { Upload } from "lucide-react"
-import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
 import { IMAGING_TYPES } from "@/lib/constants/imaging"
 import { ImagingUploadDialog } from "@/components/imaging/imaging-upload-dialog"
 import { ImagingGrid, type ImagingCardRecord } from "@/components/imaging/imaging-grid"
@@ -26,8 +25,7 @@ const isImagingType = (v: string): v is (typeof IMAGING_TYPES)[number]["value"] 
 
 export default async function ImagingPage({ searchParams }: { searchParams?: SearchParams }) {
   const user = await requirePermission("imaging:view")
-  const cookieStore = await cookies()
-  const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t } = await getI18n()
   const url: Params = (await searchParams) ?? {}
 
   const q = sp(url, "q")?.trim() ?? ""
@@ -100,8 +98,8 @@ export default async function ImagingPage({ searchParams }: { searchParams?: Sea
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{locale === "ar" ? "الأشعة والصور" : "Imaging"}</h1>
-          <p className="text-sm text-muted-foreground">{total} {locale === "ar" ? "سجل" : "records"}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t.imaging.title}</h1>
+          <p className="text-sm text-muted-foreground">{t.page.totalImaging.replace("{count}", String(total))}</p>
         </div>
         {user.permissions.includes("imaging:create") && (
           <ImagingUploadDialog
@@ -109,7 +107,7 @@ export default async function ImagingPage({ searchParams }: { searchParams?: Sea
             trigger={
               <Button>
                 <Upload className="h-4 w-4" />
-                {locale === "ar" ? "رفع صورة" : "Upload image"}
+                {t.imaging.upload}
               </Button>
             }
           />
@@ -119,26 +117,26 @@ export default async function ImagingPage({ searchParams }: { searchParams?: Sea
       <Card className="overflow-hidden">
         <form method="GET" action="/imaging" className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
           <div className="flex-1">
-            <Input type="search" name="q" defaultValue={q} placeholder={locale === "ar" ? "بحث بالاسم أو الرقم…" : "Search by name or patient no…"} className="w-full" />
+            <Input type="search" name="q" defaultValue={q} placeholder={t.page.searchPatientNo} className="w-full" />
           </div>
           <select
             name="type"
             defaultValue={type ?? ""}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="">{locale === "ar" ? "كل الأنواع" : "All types"}</option>
-            {IMAGING_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {locale === "ar" ? t.ar : t.en}
+            <option value="">{t.ui.allTypes}</option>
+            {IMAGING_TYPES.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {t.imagingTypes[opt.value] ?? opt.value}
               </option>
             ))}
           </select>
           <Button type="submit" variant="outline">
-            {locale === "ar" ? "تصفية" : "Filter"}
+            {t.common.filter}
           </Button>
           {(q || type) && (
             <Button type="button" variant="ghost" asChild>
-              <Link href="/imaging">{locale === "ar" ? "مسح" : "Clear"}</Link>
+              <Link href="/imaging">{t.common.clear}</Link>
             </Button>
           )}
         </form>
@@ -147,25 +145,25 @@ export default async function ImagingPage({ searchParams }: { searchParams?: Sea
 
         <div className="flex items-center justify-between border-t p-4 text-sm">
           <p className="text-muted-foreground">
-            {locale === "ar" ? `صفحة ${page} من ${totalPages}` : `Page ${page} of ${totalPages}`}
+            {t.common.page} {page} {t.common.of} {totalPages}
           </p>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" disabled={page <= 1} asChild={page > 1}>
               {page > 1 ? (
                 <Link href={`/imaging?page=${page - 1}${preservedQuery ? `&${preservedQuery}` : ""}`}>
-                  {locale === "ar" ? "السابق" : "Previous"}
+                  {t.common.previous}
                 </Link>
               ) : (
-                <span>{locale === "ar" ? "السابق" : "Previous"}</span>
+                <span>{t.common.previous}</span>
               )}
             </Button>
             <Button variant="outline" size="sm" disabled={page >= totalPages} asChild={page < totalPages}>
               {page < totalPages ? (
                 <Link href={`/imaging?page=${page + 1}${preservedQuery ? `&${preservedQuery}` : ""}`}>
-                  {locale === "ar" ? "التالي" : "Next"}
+                  {t.common.next}
                 </Link>
               ) : (
-                <span>{locale === "ar" ? "التالي" : "Next"}</span>
+                <span>{t.common.next}</span>
               )}
             </Button>
           </div>

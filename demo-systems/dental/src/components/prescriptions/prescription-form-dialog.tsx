@@ -45,7 +45,7 @@ let rowSeq = 0
 const newRow = (): ItemRow => ({ rowId: `rx-${++rowSeq}` })
 
 export function PrescriptionFormDialog({ trigger, options, defaultDentistId }: Props) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [patientId, setPatientId] = useState("")
@@ -60,13 +60,13 @@ export function PrescriptionFormDialog({ trigger, options, defaultDentistId }: P
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!patientId) {
-      setError(locale === "ar" ? "حدد المريض أولاً" : t.common.required)
+      setError(t.dialogs.labSelectPatient)
       return
     }
     const formData = new FormData(e.currentTarget)
     const names = formData.getAll("itemName").map((x) => String(x).trim())
     if (names.length === 0 || names.every((n) => n === "")) {
-      setError(locale === "ar" ? "أضف دواءً واحداً على الأقل" : "Add at least one medication")
+      setError(t.dialogs.prescriptionMin)
       return
     }
     setError(null)
@@ -78,7 +78,7 @@ export function PrescriptionFormDialog({ trigger, options, defaultDentistId }: P
         setPatientId("")
         setRows([newRow()])
       } else {
-        setError(locale === "ar" ? "حدث خطأ أثناء الحفظ" : t.common.error)
+        setError(t.common.error)
       }
     })
   }
@@ -89,9 +89,9 @@ export function PrescriptionFormDialog({ trigger, options, defaultDentistId }: P
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <form onSubmit={onSubmit} className="grid gap-4 py-2">
           <DialogHeader>
-            <DialogTitle>{locale === "ar" ? "وصفة طبية جديدة" : "New Prescription"}</DialogTitle>
+            <DialogTitle>{t.prescriptions.newPrescription}</DialogTitle>
             <DialogDescription>
-              {locale === "ar" ? "أدخل المريض والأدوية الموصوفة" : "Enter the patient and the prescribed medications"}
+              {t.dialogs.prescriptionHint}
             </DialogDescription>
           </DialogHeader>
 
@@ -134,10 +134,10 @@ export function PrescriptionFormDialog({ trigger, options, defaultDentistId }: P
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>{locale === "ar" ? "الأدوية" : "Medications"}</Label>
+                <Label>{t.nav.medications}</Label>
                 <Button type="button" size="sm" variant="outline" onClick={addRow}>
                   <Plus className="h-3.5 w-3.5" />
-                  {locale === "ar" ? "إضافة دواء" : "Add"}
+                  {t.common.add}
                 </Button>
               </div>
 
@@ -146,48 +146,48 @@ export function PrescriptionFormDialog({ trigger, options, defaultDentistId }: P
                   <div className="grid gap-2 sm:grid-cols-2">
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">
-                        {locale === "ar" ? "اسم الدواء *" : "Medication *"}
+                        {t.page.medication} *
                       </label>
-                      <Input name="itemName" placeholder="Amoxicillin" />
+                      <Input name="itemName" placeholder={t.dialogs.rxMedicationPh} />
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground">Dose</label>
-                        <Input name="itemDose" placeholder="500 mg" />
+                        <label className="text-xs font-medium text-muted-foreground">{t.page.dose}</label>
+                        <Input name="itemDose" placeholder={t.dialogs.rxItemDosePh} />
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">
-                          {locale === "ar" ? "مرات/يوم" : "Frequency"}
+                          {t.page.frequency}
                         </label>
-                        <Input name="itemFrequency" placeholder="3x daily" />
+                        <Input name="itemFrequency" placeholder={t.dialogs.rxItemFrequencyPh} />
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">
-                          {locale === "ar" ? "المدة" : "Duration"}
+                          {t.page.duration}
                         </label>
-                        <Input name="itemDuration" placeholder="7 days" />
+                        <Input name="itemDuration" placeholder={t.dialogs.rxItemDurationPh} />
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">Route</label>
-                      <Input name="itemRoute" placeholder="Oral" />
+                      <label className="text-xs font-medium text-muted-foreground">{t.page.route}</label>
+                      <Input name="itemRoute" placeholder={t.dialogs.rxItemRoutePh} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">
-                        {locale === "ar" ? "الكمية" : "Quantity"}
+                        {t.common.quantity}
                       </label>
-                      <Input name="itemQuantity" placeholder="21 tabs" />
+                      <Input name="itemQuantity" placeholder={t.dialogs.rxItemQuantityPh} />
                     </div>
                     <div className="sm:col-span-2 space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">
-                        {locale === "ar" ? "تعليمات" : "Instructions"}
+                        {t.page.instructions}
                       </label>
                       <div className="flex gap-2">
-                        <Input name="itemInstructions" placeholder={locale === "ar" ? "بعد الأكل…" : "After meals…"} className="flex-1" />
+                        <Input name="itemInstructions" placeholder={t.dialogs.rxItemInstructionsPh} className="flex-1" />
                         {rows.length > 1 && (
                           <Button type="button" size="icon" variant="ghost" className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeRow(row.rowId)}>
                             <Trash2 className="h-4 w-4" />
-                            <span className="sr-only">remove</span>
+                            <span className="sr-only">{t.ui.remove}</span>
                           </Button>
                         )}
                       </div>
@@ -199,7 +199,7 @@ export function PrescriptionFormDialog({ trigger, options, defaultDentistId }: P
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="rx-instructions">{locale === "ar" ? "تعليمات عامة" : "General instructions"}</Label>
+                <Label htmlFor="rx-instructions">{t.page.generalInstructions}</Label>
                 <Textarea id="rx-instructions" name="instructions" rows={2} />
               </div>
               <div className="space-y-1.5">

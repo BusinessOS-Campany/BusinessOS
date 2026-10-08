@@ -81,7 +81,7 @@ export default async function DashboardPage() {
     .sort((a, b) => a.month.localeCompare(b.month))
 
   const statusData = todayStats.map((s) => ({
-    name: s.status,
+    name: statusLabel(t, s.status),
     value: s._count._all,
     color: STATUS_COLORS[s.status] ?? "hsl(var(--muted))",
   }))

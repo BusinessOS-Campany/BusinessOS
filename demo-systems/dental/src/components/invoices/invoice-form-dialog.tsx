@@ -56,7 +56,6 @@ export function InvoiceFormDialog({ trigger, patients, dentists, procedures, def
   const [rows, setRows] = useState<Row[]>([newRow()])
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   const addRow = () => setRows((prev) => [...prev, newRow()])
   const removeRow = (rowId: string) => setRows((prev) => prev.filter((r) => r.rowId !== rowId))
@@ -75,7 +74,7 @@ export function InvoiceFormDialog({ trigger, patients, dentists, procedures, def
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!patientId) {
-      setError(ar ? "حدد المريض أولاً" : t.common.select)
+      setError(t.dialogs.labSelectPatient)
       return
     }
     setError(null)
@@ -88,9 +87,9 @@ export function InvoiceFormDialog({ trigger, patients, dentists, procedures, def
         setPatientId("")
         setRows([newRow()])
       } else if (res.error === "no_items") {
-        setError(ar ? "أضف بنداً واحداً على الأقل" : "Add at least one item")
+        setError(t.dialogs.invoiceMinItems)
       } else {
-        setError(ar ? "حدث خطأ أثناء الحفظ" : t.common.error)
+        setError(t.common.error)
       }
     })
   }
@@ -102,7 +101,7 @@ export function InvoiceFormDialog({ trigger, patients, dentists, procedures, def
         <form onSubmit={onSubmit} className="grid gap-4 py-2">
           <DialogHeader>
             <DialogTitle>{t.billing.newInvoice}</DialogTitle>
-            <DialogDescription>{ar ? "فاتورة علاجية ببنود من دليل الإجراءات أو وصف حر" : "Issue an invoice with catalog procedures or free-text items"}</DialogDescription>
+            <DialogDescription>{t.dialogs.invoiceHint}</DialogDescription>
           </DialogHeader>
 
           <input type="hidden" name="patientId" value={patientId} />
@@ -159,11 +158,11 @@ export function InvoiceFormDialog({ trigger, patients, dentists, procedures, def
                       name="description"
                       value={row.desc}
                       onChange={(e) => setRows((prev) => prev.map((r) => (r.rowId === row.rowId ? { ...r, desc: e.target.value } : r)))}
-                      placeholder={ar ? "وصف البند…" : "Item description…"}
+                      placeholder={t.dialogs.invoiceItemDescPh}
                     />
                   </div>
                   <div className="space-y-1 sm:col-span-3">
-                    <label className="text-xs font-medium text-muted-foreground">{ar ? "الإجراء (اختياري)" : "Procedure (optional)"}</label>
+                    <label className="text-xs font-medium text-muted-foreground">{t.dialogs.procedureOptional}</label>
                     <Select value={row.procedureId} onValueChange={(v) => pickProcedure(row.rowId, v)}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder={t.common.select} />
@@ -171,7 +170,7 @@ export function InvoiceFormDialog({ trigger, patients, dentists, procedures, def
                       <SelectContent>
                         {procedures.map((p) => (
                           <SelectItem key={p.id} value={p.id}>
-                            {p.code} · {ar ? p.nameAr : p.nameEn}
+                            {p.code} · {locale === "ar" ? p.nameAr : p.nameEn}
                           </SelectItem>
                         ))}
                       </SelectContent>

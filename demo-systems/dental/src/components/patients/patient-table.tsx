@@ -34,15 +34,13 @@ interface PatientsTableProps {
 }
 
 export function PatientsTable({ rows }: PatientsTableProps) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
 
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
         <p className="text-sm text-muted-foreground">{t.common.noData}</p>
-        <p className="text-xs text-muted-foreground/70">
-          {locale === "ar" ? "جرّب تعديل البحث أو التصفية" : "Try adjusting your search or filters"}
-        </p>
+        <p className="text-xs text-muted-foreground/70">{t.patients.emptyHint}</p>
       </div>
     )
   }
@@ -75,7 +73,7 @@ export function PatientsTable({ rows }: PatientsTableProps) {
                     {!p.isActive && <Badge variant="secondary">{t.patients.inactive}</Badge>}
                   </div>
                 </TableCell>
-                <TableCell>{locale === "ar" ? (p.gender === "MALE" ? "ذكر" : "أنثى") : p.gender === "MALE" ? "Male" : "Female"}</TableCell>
+                <TableCell>{p.gender === "MALE" ? t.patients.male : t.patients.female}</TableCell>
                 <TableCell>{age !== null ? age : "—"}</TableCell>
                 <TableCell dir="ltr" className="text-left">{p.phone ?? "—"}</TableCell>
                 <TableCell>{p.city ?? "—"}</TableCell>

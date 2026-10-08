@@ -5,6 +5,7 @@ import { cookies } from "next/headers"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
 import { statusColor } from "@/lib/status-ui"
 import { formatCurrency, formatDate } from "@/lib/format"
 import { installmentStatusLabel } from "@/lib/constants/billing"
@@ -22,7 +23,7 @@ export default async function InstallmentPlanDetailPage({ params }: Props) {
   const { id } = await params
   const cookieStore = await cookies()
   const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
-  const ar = locale === "ar"
+  const { t } = await getI18n()
 
   const plan = await prisma.paymentPlan.findUnique({
     where: { id },
@@ -46,7 +47,7 @@ export default async function InstallmentPlanDetailPage({ params }: Props) {
         <Button variant="ghost" asChild>
           <Link href="/installments">
             <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
-            {ar ? "العودة لخطط التقسيط" : "Back to installment plans"}
+            {t.installments.back}
           </Link>
         </Button>
       </div>
@@ -54,16 +55,16 @@ export default async function InstallmentPlanDetailPage({ params }: Props) {
       <div className="grid gap-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">{ar ? "خطة السداد" : "Payment Plan"}</CardTitle>
+            <CardTitle className="text-xl">{t.installments.plan}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "المريض" : "Patient"}</p>
+              <p className="text-xs text-muted-foreground">{t.installments.patient}</p>
               <Link href={`/patients/${plan.patient.id}`} className="font-medium hover:underline">{patientName}</Link>
               <p className="text-xs text-muted-foreground">{plan.patient.patientNo}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "الفاتورة" : "Invoice"}</p>
+              <p className="text-xs text-muted-foreground">{t.installments.invoice}</p>
               {plan.invoice ? (
                 <Link href={`/invoices/${plan.invoice.id}`} className="font-medium tabular-nums hover:underline">{plan.invoice.invoiceNo}</Link>
               ) : (
@@ -71,24 +72,24 @@ export default async function InstallmentPlanDetailPage({ params }: Props) {
               )}
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "الإجمالي" : "Total"}</p>
+              <p className="text-xs text-muted-foreground">{t.installments.totalAmount}</p>
               <p className="font-medium tabular-nums">{formatCurrency(plan.totalAmount)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "الدفعة الأولى" : "Down payment"}</p>
+              <p className="text-xs text-muted-foreground">{t.installments.downPayment}</p>
               <p className="font-medium tabular-nums">{formatCurrency(plan.downPayment)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "المدفوع" : "Paid"}</p>
+              <p className="text-xs text-muted-foreground">{t.installments.paid}</p>
               <p className="font-medium tabular-nums">{formatCurrency(plan.paidAmount)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{ar ? "المتبقي" : "Remaining"}</p>
+              <p className="text-xs text-muted-foreground">{t.installments.remaining}</p>
               <p className="font-medium tabular-nums">{formatCurrency(plan.remainingAmount)}</p>
             </div>
             {plan.notes && (
               <div className="sm:col-span-2">
-                <p className="text-xs text-muted-foreground">{ar ? "ملاحظات" : "Notes"}</p>
+                <p className="text-xs text-muted-foreground">{t.installments.notes}</p>
                 <p className="font-medium">{plan.notes}</p>
               </div>
             )}
@@ -97,26 +98,26 @@ export default async function InstallmentPlanDetailPage({ params }: Props) {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">{ar ? "الأقساط" : "Installments"}</CardTitle>
+            <CardTitle className="text-lg">{t.installments.installments}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{ar ? "الاستحقاق" : "Due date"}</TableHead>
-                    <TableHead className="text-end">{ar ? "المبلغ" : "Amount"}</TableHead>
-                    <TableHead className="text-end">{ar ? "المدفوع" : "Paid"}</TableHead>
-                    <TableHead className="text-end">{ar ? "المتبقي" : "Remaining"}</TableHead>
-                    <TableHead>{ar ? "الحالة" : "Status"}</TableHead>
-                    <TableHead>{ar ? "سددها" : "Received by"}</TableHead>
-                    {canEdit && <TableHead className="text-end">{ar ? "إجراءات" : "Actions"}</TableHead>}
+                    <TableHead>{t.installments.dueDate}</TableHead>
+                    <TableHead className="text-end">{t.installments.amount}</TableHead>
+                    <TableHead className="text-end">{t.installments.paid}</TableHead>
+                    <TableHead className="text-end">{t.installments.remaining}</TableHead>
+                    <TableHead>{t.installments.status}</TableHead>
+                    <TableHead>{t.installments.receivedBy}</TableHead>
+                    {canEdit && <TableHead className="text-end">{t.common.actions}</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {plan.installments.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">{ar ? "لا توجد أقساط في هذه الخطة" : "No installments in this plan"}</TableCell>
+                      <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">{t.installments.noInstallments}</TableCell>
                     </TableRow>
                   ) : (
                     plan.installments.map((inst) => {
@@ -140,7 +141,7 @@ export default async function InstallmentPlanDetailPage({ params }: Props) {
                             </span>
                           </TableCell>
                           <TableCell>
-                            {inst.receivedBy ? (ar && inst.receivedBy.nameAr ? inst.receivedBy.nameAr : inst.receivedBy.name) : "—"}
+                            {inst.receivedBy ? (locale === "ar" && inst.receivedBy.nameAr ? inst.receivedBy.nameAr : inst.receivedBy.name) : "—"}
                             {inst.paidAt ? <p className="text-xs text-muted-foreground">{formatDate(inst.paidAt, locale)}</p> : null}
                           </TableCell>
                           {canEdit && (

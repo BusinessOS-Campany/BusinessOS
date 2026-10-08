@@ -3,6 +3,7 @@
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useI18n } from "@/components/lang-provider"
+import { statusLabel } from "@/lib/i18n"
 import { INVOICE_STATUSES } from "@/lib/constants/billing"
 import { updateInvoiceStatusAction, refundInvoiceAction, deleteInvoiceAction } from "@/lib/actions/invoices"
 import { Button } from "@/components/ui/button"
@@ -17,10 +18,9 @@ interface Props {
 }
 
 export function InvoiceStatusControls({ invoiceId, status, canEdit, canRefund, canDelete }: Props) {
-  const { locale } = useI18n()
+  const { t } = useI18n()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   const onChange = (next: string) => {
     startTransition(async () => {
@@ -29,14 +29,14 @@ export function InvoiceStatusControls({ invoiceId, status, canEdit, canRefund, c
     })
   }
   const onRefund = () => {
-    if (!window.confirm(ar ? "استرداد هذه الفاتورة؟" : "Refund this invoice?")) return
+    if (!window.confirm(t.dialogs.invoiceRefundConfirm)) return
     startTransition(async () => {
       await refundInvoiceAction(invoiceId)
       router.refresh()
     })
   }
   const onDelete = () => {
-    if (!window.confirm(ar ? "حذف هذه الفاتورة؟" : "Delete this invoice?")) return
+    if (!window.confirm(t.dialogs.invoiceDeleteConfirm)) return
     startTransition(async () => {
       await deleteInvoiceAction(invoiceId)
       router.refresh()
@@ -54,7 +54,7 @@ export function InvoiceStatusControls({ invoiceId, status, canEdit, canRefund, c
         >
           {INVOICE_STATUSES.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {statusLabel(t, s)}
             </option>
           ))}
         </select>
@@ -62,13 +62,13 @@ export function InvoiceStatusControls({ invoiceId, status, canEdit, canRefund, c
       {canRefund && status !== "REFUNDED" && (
         <Button variant="outline" size="sm" disabled={isPending} onClick={onRefund}>
           <Undo2 className="h-3.5 w-3.5" />
-          {ar ? "استرداد" : "Refund"}
+          {t.billing.refund}
         </Button>
       )}
       {canDelete && (status === "DRAFT" || status === "CANCELLED") && (
         <Button variant="outline" size="sm" disabled={isPending} onClick={onDelete}>
           <Trash2 className="h-3.5 w-3.5" />
-          {ar ? "حذف" : "Delete"}
+          {t.common.delete}
         </Button>
       )}
     </div>

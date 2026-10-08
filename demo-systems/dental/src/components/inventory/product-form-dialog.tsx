@@ -57,14 +57,13 @@ export function ProductFormDialog({ trigger, existing = null, suppliers = [] }: 
   const [supplierId, setSupplierId] = useState(existing?.supplierId ?? "")
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
     const sku = (new FormData(e.currentTarget).get("sku") as string)?.trim()
     if (!sku) {
-      setError(ar ? "رمز الصنف مطلوب" : "SKU is required")
+      setError(t.dialogs.productSkuRequired)
       return
     }
     startTransition(async () => {
@@ -76,9 +75,9 @@ export function ProductFormDialog({ trigger, existing = null, suppliers = [] }: 
         router.refresh()
         setOpen(false)
       } else if (res.error === "duplicate") {
-        setError(ar ? "رمز الصنف مستخدم بالفعل لهذا الفرع" : "This SKU already exists for the branch")
+        setError(t.dialogs.productSkuExists)
       } else {
-        setError(ar ? "حدث خطأ أثناء الحفظ" : t.common.error)
+        setError(t.common.error)
       }
     })
   }
@@ -90,7 +89,7 @@ export function ProductFormDialog({ trigger, existing = null, suppliers = [] }: 
         <form onSubmit={onSubmit} className="grid gap-4 py-2">
           <DialogHeader>
             <DialogTitle>{existing ? t.inventory.editProduct : t.inventory.newProduct}</DialogTitle>
-            <DialogDescription>{ar ? "بيانات الصنف ومستوى المخزون" : "Product details and stock level"}</DialogDescription>
+            <DialogDescription>{t.dialogs.productHint}</DialogDescription>
           </DialogHeader>
 
           {existing && <input type="hidden" name="id" value={existing.id} />}
@@ -136,7 +135,7 @@ export function ProductFormDialog({ trigger, existing = null, suppliers = [] }: 
               <Label>{t.inventory.supplier}</Label>
               <Select value={supplierId} onValueChange={setSupplierId}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={ar ? "بدون مورد" : "No supplier"} />
+                  <SelectValue placeholder={t.dialogs.noSupplierPh} />
                 </SelectTrigger>
                 <SelectContent>
                   {suppliers.map((s) => (
@@ -196,7 +195,7 @@ export function ProductFormDialog({ trigger, existing = null, suppliers = [] }: 
 
           <div className="space-y-1.5">
             <Label>{t.inventory.location}</Label>
-            <Input name="location" defaultValue={existing?.location ?? ""} placeholder={ar ? "رف / خزانة…" : "Shelf / cabinet…"} />
+            <Input name="location" defaultValue={existing?.location ?? ""} placeholder={t.dialogs.productLocationPh} />
           </div>
 
           {error && (

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useI18n } from "@/components/lang-provider"
 import { updateWaitingStatusAction } from "@/lib/actions/waiting-room"
+import { statusLabel } from "@/lib/i18n"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { statusColor } from "@/lib/status-ui"
@@ -50,14 +51,9 @@ function priorityColor(p: string): { border: string; text: string } {
 }
 
 export function WaitingBoard({ active, completed, canEdit }: Props) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-
-  const statusLabel = (s: string) => {
-    const key = s === "IN_ROOM" ? "inRoom" : s === "WITH_DENTIST" ? "withDentist" : s.toLowerCase()
-    return t.statuses[key as keyof typeof t.statuses] ?? s.replace(/_/g, " ")
-  }
 
   const columns = ["WAITING", "CALLED", "IN_ROOM", "WITH_DENTIST"]
 
@@ -92,7 +88,7 @@ export function WaitingBoard({ active, completed, canEdit }: Props) {
                   backgroundColor: "transparent",
                 }}
               >
-                {row.priority}
+                {statusLabel(t, row.priority)}
               </Badge>
             )}
           </div>
@@ -101,17 +97,17 @@ export function WaitingBoard({ active, completed, canEdit }: Props) {
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
           {row.dentistName && (
             <span>
-              {locale === "ar" ? "الطبيب:" : "Dr:"} {row.dentistName}
+              {t.waitingRoom.dentist}: {row.dentistName}
             </span>
           )}
           {row.chairName && (
             <span>
-              {locale === "ar" ? "الكرسي:" : "Chair:"} {row.chairName}
+              {t.waitingRoom.chair}: {row.chairName}
             </span>
           )}
           {row.appointmentId && (
             <span>
-              {locale === "ar" ? "موعد" : "Appointment"}
+              {t.waitingRoom.fromAppointment}
             </span>
           )}
         </div>
@@ -121,11 +117,7 @@ export function WaitingBoard({ active, completed, canEdit }: Props) {
         {canEdit && row.status !== "COMPLETED" && (
           <div className="mt-3 flex gap-2">
             <Button size="sm" variant="outline" className="flex-1" disabled={isPending} onClick={() => advance(row)}>
-              {row.status === "WITH_DENTIST"
-                ? locale === "ar"
-                  ? "إنهاء"
-                  : t.waitingRoom.complete
-                : t.waitingRoom.advance}
+              {row.status === "WITH_DENTIST" ? t.waitingRoom.complete : t.waitingRoom.advance}
             </Button>
           </div>
         )}
@@ -139,7 +131,7 @@ export function WaitingBoard({ active, completed, canEdit }: Props) {
         {columns.map((col) => (
           <div key={col} className="rounded-xl border bg-muted/30">
             <div className="flex items-center justify-between border-b px-3 py-2">
-              <span className="text-sm font-semibold">{statusLabel(col)}</span>
+              <span className="text-sm font-semibold">{statusLabel(t, col)}</span>
               <Badge style={{ borderColor: statusColor(col).border, color: statusColor(col).text }}>
                 {active.filter((r) => r.status === col).length}
               </Badge>

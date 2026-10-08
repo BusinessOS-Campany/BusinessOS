@@ -1,6 +1,7 @@
 "use client"
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useI18n } from "@/components/lang-provider"
 import { TEETH_BY_DENTITION, type ToothMeta } from "@/lib/dental-tooth"
 import { CONDITION_VISUALS } from "@/lib/constants/clinical"
 import { cn } from "@/lib/utils"
@@ -29,6 +30,7 @@ const LOWER_QUADS: Record<"ADULT" | "PRIMARY", number[]> = {
 const ARC_AMP = 8
 
 export function DentalChart({ dentition, records, onSelect, locale }: Props) {
+  const { t } = useI18n()
   const teeth = TEETH_BY_DENTITION[dentition]
   const gridRef = useRef<HTMLDivElement>(null)
   const [gridW, setGridW] = useState(0)
@@ -107,7 +109,7 @@ export function DentalChart({ dentition, records, onSelect, locale }: Props) {
     <div dir="ltr" className="w-full space-y-2 rounded-xl border bg-background p-2 sm:p-4">
       <div className="space-y-1">
         <p className="text-[10px] font-medium text-muted-foreground sm:text-xs">
-          {locale === "ar" ? "الفك العلوي" : "Upper arch"}
+          {t.chart.upperArch}
         </p>
         <div ref={gridRef} className="w-full overflow-x-auto">
           <div className="mx-auto flex w-max items-end">
@@ -120,7 +122,7 @@ export function DentalChart({ dentition, records, onSelect, locale }: Props) {
 
       <div className="space-y-1">
         <p className="text-[10px] font-medium text-muted-foreground sm:text-xs">
-          {locale === "ar" ? "الفك السفلي" : "Lower arch"}
+          {t.chart.lowerArch}
         </p>
         <div className="w-full overflow-x-auto">
           <div className="mx-auto flex w-max items-start">

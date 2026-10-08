@@ -1,7 +1,7 @@
 import { requirePermission } from "@/lib/dal"
 import { prisma } from "@/lib/prisma"
-import { cookies } from "next/headers"
-import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
+import { statusLabel } from "@/lib/i18n"
 import { formatCurrency, formatNumber } from "@/lib/format"
 import { expenseCategoryLabel } from "@/lib/constants/billing"
 import { Button } from "@/components/ui/button"
@@ -28,9 +28,7 @@ const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).pad
 
 export default async function ReportsPage() {
   const user = await requirePermission("reports:view")
-  const cookieStore = await cookies()
-  const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
-  const ar = locale === "ar"
+  const { t, locale } = await getI18n()
   const scope = user.branchId ? { branchId: user.branchId } : {}
 
   const today = dayStart()
@@ -102,15 +100,6 @@ export default async function ReportsPage() {
 
   const band = (v: unknown) => Number(v ?? 0)
 
-  const statusLabel: Record<string, string> = {
-    DRAFT: ar ? "مسودة" : "Draft",
-    ISSUED: ar ? "صادرة" : "Issued",
-    PARTIALLY_PAID: ar ? "مدفوعة جزئيًا" : "Partially paid",
-    PAID: ar ? "مدفوعة" : "Paid",
-    CANCELLED: ar ? "ملغاة" : "Cancelled",
-    REFUNDED: ar ? "مستردة" : "Refunded",
-  }
-
   const trendMap = new Map<string, number>()
   for (const p of monthlyPayments) {
     const key = monthKey(p.paidAt)
@@ -129,36 +118,36 @@ export default async function ReportsPage() {
   const maxTrend = Math.max(1, ...trend.map((t) => t.value))
 
   const stats = [
-    { label: ar ? "إيرادات اليوم" : "Revenue today", value: formatCurrency(revenueToday._sum.amount, "YER") },
-    { label: ar ? "إيرادات الشهر" : "Revenue this month", value: formatCurrency(revenueMonth._sum.amount, "YER") },
+    { label: t.reports.revenueToday, value: formatCurrency(revenueToday._sum.amount, "YER") },
+    { label: t.reports.revenueMonth, value: formatCurrency(revenueMonth._sum.amount, "YER") },
     {
-      label: ar ? "فواتير مدفوعة" : "Paid invoices",
+      label: t.reports.paidInvoices,
       value: formatNumber(invoiceCounts.find((i) => i.status === "PAID")?._count._all ?? 0),
     },
     {
-      label: ar ? "فواتير معلقة" : "Pending invoices",
+      label: t.reports.pendingInvoices,
       value: formatNumber(
         invoiceCounts
           .filter((i) => i.status === "ISSUED" || i.status === "PARTIALLY_PAID")
           .reduce((acc, i) => acc + i._count._all, 0)
       ),
     },
-    { label: ar ? "أقساط متأخرة" : "Overdue installments", value: formatNumber(overdueInstallments), warn: overdueInstallments > 0 },
+    { label: t.reports.overdueInstallments, value: formatNumber(overdueInstallments), warn: overdueInstallments > 0 },
   ]
 
   const exportLinks = [
-    { type: "procedures", label: ar ? "أفضل الإجراءات" : "Top procedures" },
-    { type: "patients", label: ar ? "أعلى المرضى إنفاقًا" : "Top patients" },
-    { type: "invoices", label: ar ? "الفواتير حسب الحالة" : "Invoices by status" },
-    { type: "expenses", label: ar ? "المصروفات حسب الفئة" : "Expenses by category" },
+    { type: "procedures", label: t.reports.topProcedures },
+    { type: "patients", label: t.reports.topPatients },
+    { type: "invoices", label: t.reports.invoicesByStatus },
+    { type: "expenses", label: t.reports.expensesByCategory },
   ]
 
   return (
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{ar ? "التقارير" : "Reports"}</h1>
-          <p className="text-sm text-muted-foreground">{ar ? "ملخص الأداء المالي والتشغيلي" : "Financial and operational summary"}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t.reports.title}</h1>
+          <p className="text-sm text-muted-foreground">{t.page.reportsSubtitle}</p>
         </div>
         {user.permissions.includes("reports:export") && (
           <div className="flex flex-wrap gap-2">
@@ -188,7 +177,7 @@ export default async function ReportsPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">{ar ? "الاتجاه الشهري للإيرادات" : "Monthly revenue trend"}</CardTitle>
+            <CardTitle className="text-base">{t.reports.monthlyTrend}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex h-48 items-end gap-2">
@@ -205,27 +194,27 @@ export default async function ReportsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">{ar ? "الفواتير حسب الحالة" : "Invoices by status"}</CardTitle>
+            <CardTitle className="text-base">{t.reports.invoicesByStatus}</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{ar ? "الحالة" : "Status"}</TableHead>
-                  <TableHead className="text-end">{ar ? "العدد" : "Count"}</TableHead>
+                  <TableHead>{t.common.status}</TableHead>
+                  <TableHead className="text-end">{t.reports.count}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {invoiceCounts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={2} className="py-8 text-center text-sm text-muted-foreground">
-                      {ar ? "لا توجد بيانات" : "No data available"}
+                      {t.reports.noData}
                     </TableCell>
                   </TableRow>
                 ) : (
                   invoiceCounts.map((i) => (
                     <TableRow key={i.status}>
-                      <TableCell>{statusLabel[i.status] ?? i.status}</TableCell>
+                      <TableCell>{statusLabel(t, i.status)}</TableCell>
                       <TableCell className="text-end tabular-nums">{formatNumber(i._count._all)}</TableCell>
                     </TableRow>
                   ))
@@ -237,22 +226,22 @@ export default async function ReportsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">{ar ? "أكثر الإجراءات" : "Top procedures"}</CardTitle>
+            <CardTitle className="text-base">{t.reports.topProcedures}</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{ar ? "الإجراء" : "Procedure"}</TableHead>
-                  <TableHead className="text-end">{ar ? "العدد" : "Count"}</TableHead>
-                  <TableHead className="text-end">{ar ? "المبلغ" : "Amount"}</TableHead>
+                  <TableHead>{t.treatmentPlans.procedure}</TableHead>
+                  <TableHead className="text-end">{t.reports.count}</TableHead>
+                  <TableHead className="text-end">{t.reports.amount}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {topProcedures.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={3} className="py-8 text-center text-sm text-muted-foreground">
-                      {ar ? "لا توجد بيانات" : "No data available"}
+                      {t.reports.noData}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -271,21 +260,21 @@ export default async function ReportsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">{ar ? "المصروفات حسب الفئة (الشهر)" : "Expenses by category (month)"}</CardTitle>
+            <CardTitle className="text-base">{t.reports.expensesByCategory}</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{ar ? "الفئة" : "Category"}</TableHead>
-                  <TableHead className="text-end">{ar ? "المبلغ" : "Amount"}</TableHead>
+                  <TableHead>{t.expenses.category}</TableHead>
+                  <TableHead className="text-end">{t.reports.amount}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {expensesByCategory.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={2} className="py-8 text-center text-sm text-muted-foreground">
-                      {ar ? "لا توجد بيانات" : "No data available"}
+                      {t.reports.noData}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -304,22 +293,22 @@ export default async function ReportsPage() {
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle className="text-base">{ar ? "أعلى المرضى إنفاقًا" : "Top patients by spending"}</CardTitle>
+          <CardTitle className="text-base">{t.reports.topPatients}</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{ar ? "المريض" : "Patient"}</TableHead>
-                <TableHead>{ar ? "الرقم" : "No."}</TableHead>
-                <TableHead className="text-end">{ar ? "إجمالي المدفوعات" : "Total paid"}</TableHead>
+                <TableHead>{t.billing.patient}</TableHead>
+                <TableHead>{t.page.no}</TableHead>
+                <TableHead className="text-end">{t.billing.totalPaid}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {topPatients.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={3} className="py-8 text-center text-sm text-muted-foreground">
-                    {ar ? "لا توجد بيانات" : "No data available"}
+                    {t.reports.noData}
                   </TableCell>
                 </TableRow>
               ) : (

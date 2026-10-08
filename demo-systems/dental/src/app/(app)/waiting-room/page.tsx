@@ -1,17 +1,14 @@
 import { requirePermission } from "@/lib/dal"
 import { prisma } from "@/lib/prisma"
-import { cookies } from "next/headers"
 import { UserPlus } from "lucide-react"
-import { LANG_COOKIE, dictionary, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
 import { WaitingBoard, type WaitingEntryRow } from "@/components/waiting-room/waiting-board"
 import { CheckInDialog, type WaitingRoomOptions } from "@/components/waiting-room/check-in-dialog"
 import { Button } from "@/components/ui/button"
 
 export default async function WaitingRoomPage() {
   const user = await requirePermission("waitingRoom:view")
-  const cookieStore = await cookies()
-  const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
-  const t = dictionary[locale]
+  const { t, locale } = await getI18n()
   const branchId = user.branchId ?? (await prisma.branch.findFirstOrThrow({ select: { id: true } })).id
 
   const startOfToday = new Date()
@@ -118,7 +115,7 @@ export default async function WaitingRoomPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t.waitingRoom.title}</h1>
           <p className="text-sm text-muted-foreground">
-            {locale === "ar" ? `${activeEntries.length} في الانتظار حالياً` : `${activeEntries.length} currently waiting`}
+            {t.page.currentlyWaiting.replace("{count}", String(activeEntries.length))}
           </p>
         </div>
         {canCreate && (

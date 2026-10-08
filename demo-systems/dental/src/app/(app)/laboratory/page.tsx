@@ -1,9 +1,9 @@
 import { requirePermission } from "@/lib/dal"
 import { prisma } from "@/lib/prisma"
-import { cookies } from "next/headers"
 import Link from "next/link"
 import { FlaskConical } from "lucide-react"
-import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
+import { statusLabel } from "@/lib/i18n"
 import { statusColor } from "@/lib/status-ui"
 import { formatCurrency, formatDate } from "@/lib/format"
 import { LAB_CASE_STATUSES, labStatusLabel } from "@/lib/constants/inventory"
@@ -28,8 +28,7 @@ const isStatus = (v: string): v is (typeof LAB_CASE_STATUSES)[number] =>
 
 export default async function LaboratoryPage({ searchParams }: { searchParams?: SearchParams }) {
   const user = await requirePermission("laboratory:view")
-  const cookieStore = await cookies()
-  const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t, locale } = await getI18n()
   const ar = locale === "ar"
   const url: Params = (await searchParams) ?? {}
 
@@ -98,15 +97,15 @@ export default async function LaboratoryPage({ searchParams }: { searchParams?: 
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{ar ? "المختبر" : "Laboratory"}</h1>
-          <p className="text-sm text-muted-foreground">{total} {ar ? "حالة" : "lab cases"}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t.laboratory.title}</h1>
+          <p className="text-sm text-muted-foreground">{t.page.totalCases.replace("{count}", String(total))}</p>
         </div>
         {user.permissions.includes("laboratory:create") && (
           <LabCaseFormDialog
             trigger={
               <Button>
                 <FlaskConical className="h-4 w-4" />
-                {ar ? "حالة جديدة" : "New Lab Case"}
+                {t.laboratory.newCase}
               </Button>
             }
             patients={patientOptions}
@@ -118,22 +117,22 @@ export default async function LaboratoryPage({ searchParams }: { searchParams?: 
       <Card className="overflow-hidden">
         <form method="GET" action="/laboratory" className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
           <div className="flex-1">
-            <Input type="search" name="q" defaultValue={q} placeholder={ar ? "بحث بالمريض…" : "Search patient…"} className="w-full" />
+            <Input type="search" name="q" defaultValue={q} placeholder={t.page.searchPatient} className="w-full" />
           </div>
           <select
             name="status"
             defaultValue={status}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="">{ar ? "كل الحالات" : "All statuses"}</option>
+            <option value="">{t.ui.allStatuses}</option>
             {LAB_CASE_STATUSES.map((s) => (
               <option key={s} value={s}>{labStatusLabel(s, locale)}</option>
             ))}
           </select>
-          <Button type="submit" variant="outline">{ar ? "تصفية" : "Filter"}</Button>
+          <Button type="submit" variant="outline">{t.common.filter}</Button>
           {(q || status) && (
             <Button type="button" variant="ghost" asChild>
-              <Link href="/laboratory">{ar ? "مسح" : "Clear"}</Link>
+              <Link href="/laboratory">{t.common.clear}</Link>
             </Button>
           )}
         </form>
@@ -142,23 +141,23 @@ export default async function LaboratoryPage({ searchParams }: { searchParams?: 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{ar ? "المريض" : "Patient"}</TableHead>
-                <TableHead>{ar ? "الطبيب" : "Dentist"}</TableHead>
-                <TableHead>{ar ? "التركيبة" : "Restoration"}</TableHead>
-                <TableHead>{ar ? "الأسنان" : "Teeth"}</TableHead>
-                <TableHead>{ar ? "المختبر" : "Lab"}</TableHead>
-                <TableHead>{ar ? "الحالة" : "Status"}</TableHead>
-                <TableHead>{ar ? "العودة المتوقعة" : "Expected return"}</TableHead>
-                <TableHead className="text-end">{ar ? "التكلفة" : "Cost"}</TableHead>
+                <TableHead>{t.laboratory.patient}</TableHead>
+                <TableHead>{t.laboratory.dentist}</TableHead>
+                <TableHead>{t.laboratory.restoration}</TableHead>
+                <TableHead>{t.laboratory.teeth}</TableHead>
+                <TableHead>{t.page.lab}</TableHead>
+                <TableHead>{t.laboratory.status}</TableHead>
+                <TableHead>{t.laboratory.expectedReturn}</TableHead>
+                <TableHead className="text-end">{t.laboratory.cost}</TableHead>
                 {user.permissions.includes("laboratory:edit") && (
-                  <TableHead className="text-end">{ar ? "إجراءات" : "Actions"}</TableHead>
+                  <TableHead className="text-end">{t.common.actions}</TableHead>
                 )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-16 text-center text-sm text-muted-foreground">{ar ? "لا توجد حالات مختبر" : "No lab cases found"}</TableCell>
+                  <TableCell colSpan={9} className="py-16 text-center text-sm text-muted-foreground">{t.laboratory.noData}</TableCell>
                 </TableRow>
               ) : (
                 rows.map((c) => {
@@ -192,7 +191,7 @@ export default async function LaboratoryPage({ searchParams }: { searchParams?: 
                           className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs"
                           style={{ borderColor: col.border, color: col.text, background: col.bg }}
                         >
-                          {labStatusLabel(c.status, locale)}
+                          {statusLabel(t, c.status)}
                         </span>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-sm">{formatDate(c.expectedReturn, locale)}</TableCell>
@@ -203,7 +202,7 @@ export default async function LaboratoryPage({ searchParams }: { searchParams?: 
                             existing={lite}
                             patients={patientOptions}
                             dentists={dentistOptions}
-                            trigger={<Button variant="outline" size="sm">{ar ? "تعديل" : "Edit"}</Button>}
+                            trigger={<Button variant="outline" size="sm">{t.common.edit}</Button>}
                           />
                         </TableCell>
                       )}

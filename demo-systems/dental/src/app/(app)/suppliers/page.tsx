@@ -1,9 +1,8 @@
 import { requirePermission } from "@/lib/dal"
 import { prisma } from "@/lib/prisma"
-import { cookies } from "next/headers"
 import Link from "next/link"
 import { Truck } from "lucide-react"
-import { LANG_COOKIE, localeFrom, type Locale } from "@/lib/i18n"
+import { getI18n } from "@/lib/i18n-server"
 import { SupplierFormDialog, type SupplierLite } from "@/components/suppliers/supplier-form-dialog"
 import { Pagination } from "@/components/patients/pagination"
 import { Button } from "@/components/ui/button"
@@ -23,8 +22,7 @@ const PER_PAGE = 15
 
 export default async function SuppliersPage({ searchParams }: { searchParams?: SearchParams }) {
   const user = await requirePermission("suppliers:view")
-  const cookieStore = await cookies()
-  const locale: Locale = localeFrom(cookieStore.get(LANG_COOKIE)?.value)
+  const { t, locale } = await getI18n()
   const ar = locale === "ar"
   const url: Params = (await searchParams) ?? {}
 
@@ -63,15 +61,15 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: S
     <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{ar ? "الموردون" : "Suppliers"}</h1>
-          <p className="text-sm text-muted-foreground">{total} {ar ? "مورد" : "suppliers"}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t.suppliers.title}</h1>
+          <p className="text-sm text-muted-foreground">{t.page.totalSuppliers.replace("{count}", String(total))}</p>
         </div>
         {user.permissions.includes("suppliers:create") && (
           <SupplierFormDialog
             trigger={
               <Button>
                 <Truck className="h-4 w-4" />
-                {ar ? "مورد جديد" : "New Supplier"}
+                {t.suppliers.newSupplier}
               </Button>
             }
           />
@@ -81,12 +79,12 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: S
       <Card className="overflow-hidden">
         <form method="GET" action="/suppliers" className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
           <div className="flex-1">
-            <Input type="search" name="q" defaultValue={q} placeholder={ar ? "بحث بالاسم أو الهاتف…" : "Search name or phone…"} className="w-full" />
+            <Input type="search" name="q" defaultValue={q} placeholder={t.page.searchNamePhone} className="w-full" />
           </div>
-          <Button type="submit" variant="outline">{ar ? "تصفية" : "Filter"}</Button>
+          <Button type="submit" variant="outline">{t.common.filter}</Button>
           {q && (
             <Button type="button" variant="ghost" asChild>
-              <Link href="/suppliers">{ar ? "مسح" : "Clear"}</Link>
+              <Link href="/suppliers">{t.common.clear}</Link>
             </Button>
           )}
         </form>
@@ -95,19 +93,19 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: S
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{ar ? "الاسم" : "Name"}</TableHead>
-                <TableHead>{ar ? "التواصل" : "Contact"}</TableHead>
-                <TableHead>{ar ? "المحافظة / المدينة" : "Governorate / City"}</TableHead>
-                <TableHead className="text-end">{ar ? "المنتجات" : "Products"}</TableHead>
+                <TableHead>{t.suppliers.name}</TableHead>
+                <TableHead>{t.suppliers.contact}</TableHead>
+                <TableHead>{t.page.governorateCity}</TableHead>
+                <TableHead className="text-end">{t.suppliers.productsCount}</TableHead>
                 {user.permissions.includes("suppliers:edit") && (
-                  <TableHead className="text-end">{ar ? "إجراءات" : "Actions"}</TableHead>
+                  <TableHead className="text-end">{t.common.actions}</TableHead>
                 )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-16 text-center text-sm text-muted-foreground">{ar ? "لا يوجد موردون" : "No suppliers found"}</TableCell>
+                  <TableCell colSpan={5} className="py-16 text-center text-sm text-muted-foreground">{t.suppliers.noData}</TableCell>
                 </TableRow>
               ) : (
                 rows.map((s) => {
@@ -137,7 +135,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: S
                       <TableCell className="text-end tabular-nums">{s._count.products}</TableCell>
                       {user.permissions.includes("suppliers:edit") && (
                         <TableCell className="text-end">
-                          <SupplierFormDialog existing={lite} trigger={<Button variant="outline" size="sm">{ar ? "تعديل" : "Edit"}</Button>} />
+                          <SupplierFormDialog existing={lite} trigger={<Button variant="outline" size="sm">{t.common.edit}</Button>} />
                         </TableCell>
                       )}
                     </TableRow>

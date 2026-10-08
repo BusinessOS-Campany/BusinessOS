@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation"
 import { MoreHorizontal } from "lucide-react"
 import { useI18n } from "@/components/lang-provider"
 import { updateAppointmentStatusAction } from "@/lib/actions/appointments"
-import { APPOINTMENT_STATUSES, APPOINTMENT_TYPES } from "@/lib/constants/clinical"
+import { APPOINTMENT_STATUSES } from "@/lib/constants/clinical"
+import { statusLabel } from "@/lib/i18n"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -45,21 +46,12 @@ interface Props {
 }
 
 export function AppointmentTable({ rows }: Props) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  const typeLabel = (v: string) => {
-    const found = APPOINTMENT_TYPES.find((x) => x.value === v)
-    if (!found) return v.replace(/_/g, " ")
-    return locale === "ar" ? found.ar : found.en
-  }
-
-  const statusLabel = (v: string) => {
-    const found = APPOINTMENT_STATUSES.find((x) => x.value === v)
-    if (!found) return v.replace(/_/g, " ")
-    return locale === "ar" ? found.ar : found.en
-  }
+  const typeLabel = (v: string) =>
+    t.appointmentTypes[v as keyof typeof t.appointmentTypes] ?? v
 
   const changeStatus = (id: string, status: string) => {
     startTransition(async () => {
@@ -106,7 +98,7 @@ export function AppointmentTable({ rows }: Props) {
               <TableCell>{a.chairName ?? "—"}</TableCell>
               <TableCell>
                 <Badge style={{ borderColor: statusColor(a.status).border, color: statusColor(a.status).text }}>
-                  {statusLabel(a.status)}
+                  {statusLabel(t, a.status)}
                 </Badge>
               </TableCell>
               <TableCell className="text-end">
@@ -126,7 +118,7 @@ export function AppointmentTable({ rows }: Props) {
                         disabled={s.value === a.status}
                         onClick={() => changeStatus(a.id, s.value)}
                       >
-                        {statusLabel(s.value)}
+                        {statusLabel(t, s.value)}
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>

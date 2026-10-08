@@ -35,23 +35,16 @@ interface Props {
   invoices: PaymentInvoiceOption[]
 }
 
-const METHOD_LABELS_AR: Record<string, string> = {
-  CASH: "نقدي",
-  BANK_TRANSFER: "تحويل بنكي",
-  CARD: "بطاقة",
-  MOBILE_WALLET: "محفظة جوال",
-  OTHER: "أخرى",
-}
-const METHOD_LABELS_EN: Record<string, string> = {
-  CASH: "Cash",
-  BANK_TRANSFER: "Bank transfer",
-  CARD: "Card",
-  MOBILE_WALLET: "Mobile wallet",
-  OTHER: "Other",
+const METHOD_TO_KEY: Record<string, string> = {
+  CASH: "methodCash",
+  BANK_TRANSFER: "methodBankTransfer",
+  CARD: "methodCard",
+  MOBILE_WALLET: "methodMobileWallet",
+  OTHER: "methodOther",
 }
 
 export function PaymentFormDialog({ trigger, patients, invoices }: Props) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [patientId, setPatientId] = useState("")
@@ -59,14 +52,13 @@ export function PaymentFormDialog({ trigger, patients, invoices }: Props) {
   const [method, setMethod] = useState("CASH")
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const ar = locale === "ar"
 
   const invoiceOptions = invoices.filter((i) => i.patientId === patientId)
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!patientId) {
-      setError(ar ? "حدد المريض أولاً" : t.common.select)
+      setError(t.common.select)
       return
     }
     setError(null)
@@ -79,11 +71,11 @@ export function PaymentFormDialog({ trigger, patients, invoices }: Props) {
         setPatientId("")
         setInvoiceId("")
       } else if (res.error === "amount_exceeds") {
-        setError(ar ? "المبلغ أكبر من المتبقي على الفاتورة" : "Amount exceeds invoice balance")
+        setError(t.dialogs.invoiceAmountExceeds)
       } else if (res.error === "invoice_closed") {
-        setError(ar ? "الفاتورة ملغاة أو مستردة" : "Invoice is closed")
+        setError(t.dialogs.invoiceClosed)
       } else {
-        setError(ar ? "حدث خطأ أثناء حفظ الدفعة" : t.common.error)
+        setError(t.common.error)
       }
     })
   }
@@ -95,7 +87,7 @@ export function PaymentFormDialog({ trigger, patients, invoices }: Props) {
         <form onSubmit={onSubmit} className="grid gap-4 py-2">
           <DialogHeader>
             <DialogTitle>{t.payments.newPayment}</DialogTitle>
-            <DialogDescription>{ar ? "سجل دفعة مقابل فاتورة أو على الحساب" : "Record a payment against an invoice or on account"}</DialogDescription>
+            <DialogDescription>{t.dialogs.paymentHint}</DialogDescription>
           </DialogHeader>
 
           <input type="hidden" name="patientId" value={patientId} />
@@ -122,7 +114,7 @@ export function PaymentFormDialog({ trigger, patients, invoices }: Props) {
             <Label>{t.payments.invoice}</Label>
             <Select value={invoiceId} onValueChange={setInvoiceId}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder={ar ? "لا فاتورة (على الحساب)" : "No invoice (on account)"} />
+                <SelectValue placeholder={t.dialogs.noInvoiceOption} />
               </SelectTrigger>
               <SelectContent>
                 {invoiceOptions.map((i) => (
@@ -148,7 +140,7 @@ export function PaymentFormDialog({ trigger, patients, invoices }: Props) {
               <SelectContent>
                 {PAYMENT_METHODS.map((m) => (
                   <SelectItem key={m} value={m}>
-                    {ar ? METHOD_LABELS_AR[m] : METHOD_LABELS_EN[m]}
+                    {t.billing[METHOD_TO_KEY[m] as keyof typeof t.billing]}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -157,7 +149,7 @@ export function PaymentFormDialog({ trigger, patients, invoices }: Props) {
 
           <div className="space-y-1.5">
             <Label>{t.payments.reference}</Label>
-            <Input name="reference" placeholder={ar ? "رقم المرجع…" : "Reference…"} />
+            <Input name="reference" placeholder={t.payments.reference} />
           </div>
 
           <div className="space-y-1.5">
