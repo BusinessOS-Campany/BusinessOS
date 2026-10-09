@@ -212,6 +212,28 @@ const distDir = process.env.NEXT_DIST_DIR ?? (isDev ? ".next-dev" : ".next");
 const nextConfig: NextConfig = {
   distDir,
   devIndicators: false,
+  // `pg` lazy-requires `node:fs` / `node:path` (pg-connection-string, pgpass)
+  // and the tenant schema reader imports `fs/promises` directly (see
+  // tenancy/schemas.ts): they must never be bundled for the server.
+  // `serverExternalPackages` covers the RSC layer but the `instrumentation.ts`
+  // webpack entry skips it, which is why `next dev` alone died with "Can't
+  // resolve 'fs'"; the externals below apply to every server compilation
+  // including instrumentation.
+  serverExternalPackages: ["pg", "pg-connection-string", "pgpass"],
+  webpack(config, { isServer }) {
+    if (isServer) {
+      const externals = Array.isArray(config.externals) ? config.externals : [];
+      // supervisor.ts / tenancy/schemas.ts use `node:`-prefixed builtins in the
+      // instrumentation entry; the RegExp externalizes every one of them (the
+      // runtime keeps resolving them via Node).
+      externals.push(/^node:/);
+      for (const pkg of ["fs/promises", "fs", "path", "pg", "pg-connection-string", "pgpass", "pg-pool", "pg-protocol"]) {
+        externals.push({ [pkg]: `commonjs ${pkg}` });
+      }
+      config.externals = externals;
+    }
+    return config;
+  },
   // Fingerprinting the framework and version helps nobody and is a free
   // scanner target for anyone probing for an outdated Next.js.
   poweredByHeader: false,

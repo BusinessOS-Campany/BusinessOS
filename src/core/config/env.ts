@@ -1,6 +1,25 @@
 import { z } from "zod";
 
 /**
+ * Dev has no production origin, but the shared `.env.local` is also read by the
+ * dev server and its AUTH_URL / NEXT_PUBLIC_APP_URL name the live site
+ * (`https://bosc.dpdns.org`). A dev server that keeps them authenticates
+ * against the wrong world: better-auth sets a `Domain=bosc.dpdns.org` cookie
+ * that the browser refuses on localhost, its trustedOrigins never include the
+ * localhost Origin, and every generated absolute link points at the public
+ * site. The fix is to make dev self-contained: an origin that matches the dev
+ * launcher (`scripts/dev.ts`) and `dev:erp` (both `:3300`). `DEV_ORIGIN`
+ * overrides when the dev box serves on another port. Production
+ * (`NODE_ENV=production`, `next start`) is untouched and keeps the live URLs.
+ *
+ * Applied inside `getEnv()` (reading `process.env`), never by assigning to
+ * `process.env.AUTH_URL` directly: webpack's DefinePlugin rewrites such
+ * assignments into `"http://localhost:3300" = ...`, which is an invalid
+ * left-hand side and aborts the dev compile.
+ */
+const DEV_ORIGIN = () => process.env.DEV_ORIGIN ?? "http://localhost:3300";
+
+/**
  * Runtime environment contract. Parsed lazily on first access so that
  * `next build` never fails on missing runtime-only secrets.
  */
@@ -38,6 +57,12 @@ export function getEnv(): AppEnv {
   if (!parsed.success) {
     throw new Error(`[config] Invalid environment: ${parsed.error.issues.map((i) => `${i.path.join(".")}`).join(", ")}`);
   }
-  globalThis.__bosEnv = parsed.data;
-  return parsed.data;
+  const env: AppEnv = parsed.data;
+  if (process.env.NODE_ENV === "development") {
+    const origin = DEV_ORIGIN();
+    env.AUTH_URL = origin;
+    env.NEXT_PUBLIC_APP_URL = origin;
+  }
+  globalThis.__bosEnv = env;
+  return env;
 }
