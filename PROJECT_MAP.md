@@ -121,6 +121,80 @@ docker-compose.yml        # postgres:18 + pgadmin (redis commented out)
 
 ---
 
+## 2026-10-10 — PHARMACY COULD NOT BE COMMITTED TO GITHUB AT ALL, AND GROCERY'S DEMO IS A FORK NOBODY KNEW ABOUT (implemented, verified)
+
+**The report:** "connect demo system and real system to github so if i want to edit any thing i can commit to github." `system/dental`, `system/grocery` and both demo twins already do this. Pharmacy could not, at all.
+
+### Why pharmacy could not be committed
+
+`system/pharmacy` and `public/pharmacy` were **not in the index** — not as files, and not as a gitlink. `git status` showed them only as `??`, and `git add` was the only thing that had ever put their 367 files anywhere.
+
+The reason is a submodule that was declared and then lost. `.gitmodules` named `public/pharmacy` → `github.com/gmsnow/pharmacy` (that repo is real and reachable, `main` = `4950bcb`), but **`.git/modules/` was empty**. Both trees carried a one-line gitfile — `gitdir: ../../.git/modules/public/pharmacy` — pointing into a directory that does not exist, so **every git command run inside either folder died** with `fatal: not a git repository`. That is the same shape as the `**/.git.vendor-backup` rename at the top of `.gitignore`, except that one was completed and this one was not.
+
+The 2026-10-08 pharmacy entry above had already recorded this as a caveat and explicitly left it uncommitted ("the declaration is stale … Nothing was committed"). The declaration was the symptom; the missing `.git/modules` was why nothing could be done about it.
+
+### Fixed by vendoring, which is what dental and grocery already are
+
+Submodule path abandoned (an unfinished one is worse than none: it makes a fresh clone look for a relationship that does not exist). The dangling gitfiles deleted, `.gitmodules` deleted, both trees tracked as ordinary directories.
+
+- `f85271e` — **367 files, 160 965 insertions, 5.98 MB**. `system/pharmacy` 185 + `public/pharmacy` 182.
+- `447fc4d` — the `.gitmodules` deletion. **This was my own orphan**: `git add <pathspec>` staged only the two trees, so the removal was left unstaged and shipped in neither commit until it was caught by asking `git ls-tree origin/main` instead of trusting the local state.
+
+**Secrets gate:** the only `.env`-matching path in the entire index is the pre-existing root `.env.example`; the staged set contained **0**. `node_modules/`, `.next/`, `serverdata/` — 0 staged.
+
+### One of my findings was wrong, and the commit proved it
+
+The plan listed "auto-push is not installed: `core.hooksPath` is empty" as a defect. It is **set** — to `.githooks` — and my earlier probe had returned empty output. `f85271e` and `447fc4d` each auto-pushed on their own (`5c794b8..f85271e`, `f85271e..447fc4d`). Nothing needed fixing; had I "fixed" it, I would have touched a working mechanism on the strength of a bad reading. Recorded because the error was mine and the file is supposed to be the memory that prevents repeating it.
+
+### What the two trees had already drifted into, measured
+
+A template and its demo are the same application, and nothing in the product makes `src` byte-identical between them. `scripts/system-template-drift.ts` (new) derives its pairs from `DEMO_SYSTEMS` × `systemSourceDir(slug)` rather than a hand-written table, so a newly registered system is checked without editing the checker. It skips `src/generated/` — Prisma client bytes are the client's version, not an edit, and comparing them reported 43 of pharmacy's 45 differences as noise.
+
+| pair | hand-written files | missing from demo | content differs |
+|---|---|---|---|
+| `system/dental` ↔ `demo-systems/dental` | 151 / 151 | 0 | **0** |
+| `system/grocery` ↔ `demo-systems/grocery` | 229 / 222 | **7** | **24** |
+| `system/pharmacy` ↔ `public/pharmacy` | 126 / 124 | **2** | **0** |
+
+**Grocery is the real finding, not pharmacy.** Its demo is missing `api/bos/credentials`, `api/bos/link`, `api/health`, `lib/app-url.ts`, `lib/pwa.ts`, `lib/ttl.ts` and `shared/auth/dev-login.ts`, and 24 files it does have have diverged — including `features/shell/sidebar.tsx`, `nav-config.ts`, `pos-terminal.tsx` and `shared/db.ts`. `/demo/grocery` is a fork of the system customers are actually installed with, and nothing in the product or the tests noticed. Logged as an orphan; not touched here.
+
+### Verification
+
+`npx tsx scripts/system-template-drift.ts` names every difference by path and exits 1; a pair with no drift prints `OK`. TDD held: the 4 cases in `tests/core/system-template-drift.test.ts` failed first with `Cannot find module '../../scripts/system-template-drift'`. `npm run typecheck` 0 · `npx eslint` 0 on both new files · `npx vitest run` **786/786 PASS (64 files)** · `main…origin/main` level with both pharmacy trees present on `origin/main` and no `.gitmodules`. Root `npm run build` deliberately **not** re-run: both changes are a `scripts/` entry point and a `.gitignore` line, neither reachable from the app graph, and a platform rebuild contends with the `next start` serving `:3100` (the locked-`.next` hazard).
+
+---
+
+## 2026-10-09 — THE WHOLE PLATFORM WENT 502, AND DENTAL'S 3D + BELL WENT WITH IT (fixed, verified, root-caused)
+
+**The report:** "dental is broken — 3D is not working any more, notifications/user button and a lot of functionality stopped." Nothing named dental was broken. Three separate processes had died, and two of them had no supervisor at all.
+
+### What was actually wrong
+1. **The platform itself was dead** — nothing on `:3100`, every public route 502. Cause: a `next build` was interrupted while `next start` was serving that same `.next`; the build wipes the directory the live server reads. This is the "I break something in the code and the server goes down" failure the owner described, reproduced by accident and confirmed by the process being absent, not by reading logs.
+2. **The dental demo (`:3106`) was dead** — no process. It had been started by a manual detached `Start-Process` (recorded as an orphan in the 2026-10-06 entry) and did not survive the 2026-10-09 01:33 reboot. No pm2 entry, nothing to resurrect. `/demo/dental/model/human_teeth.glb` answered 500 because the upstream was gone; `/demo/dental/login` 500'd the same way. The 3D model, the notification bell and the user button were all symptoms of one dead port.
+3. **`opencode.bosc.dpdns.org` was 502** — the tunnel connector was up and the guard proxy answered on `:4096`, but the real OpenCode server on `:4097` was never started. `boot-bootstrap.ps1` starts the OLD `bin\opencode-server.cmd`, which resolves `opencode.cmd` through `%APPDATA%` and dies instantly under the boot task's account; the current design runs `bin\opencode-launch.js` under pm2, and pm2's saved list no longer contained it.
+
+### Fixed
+- Rebuilt (`npm run build`, route table printed), relaunched `:3100` detached, watchdog re-enabled.
+- `dental-demo` added to pm2 on `:3106` (same shape as grocery/pharmacy), so it is resurrected instead of lost.
+- `opencode-server` (opencode-launch.js → `:4097`) added to pm2. `opencode.bosc.dpdns.org` now answers **401 Unauthorized** — auth demanded, backend reached — where it answered 502 before.
+- `pm2 save`, so all five processes (dental-demo, grocery-demo, pharmacy-demo, opencode-guard, opencode-server) come back.
+
+### Verified, with a real session in a real browser
+- Public: `/demo`, `/demo/dental/login`, `/demo/grocery/login`, `/pharmacy`, `/systems` all **200**.
+- Dental, signed in through the real form (`username=admin`): dashboard loads; **3D model `200`, 1,547,688 bytes, `content-type: model/gltf-binary`, magic `glTF`** — byte-for-byte the state the 2026-10-06 entry recorded; notification bell present; 29 controls; **0 console errors**.
+- Platform interactivity after restore: the `/signin` and `/demo` canvases render, 197–199 controls per page, **0 console errors, 0 failed requests**.
+
+### Separately found and fixed: dental could not be installed at all
+`system/dental/next.config.ts` hardcoded `basePath: "/dental"`, so `systemContract("dental").missing` was non-empty and `installSystemForOrg` silently degraded **every dental install into a forever-pending approval request** instead of cloning the system. Now reads `SYSTEM_BASE_PATH ?? "/dental"`, exactly like pharmacy — contract `missing: []`. Verified live: approval clones 573 files, card badges installed, href `/{org}/dental`, row appears in the org's systems.
+
+### The check was lying about it
+`scripts/systems-install-check.ts` reported 14/20 for reasons that had nothing to do with the product: it hardcoded `marketplace` wording while `/systems` renders `platform.catalog.*`, it read a pending string (`بانتظار الموافقة`) the page never renders (the real badge is `قيد الموافقة`), it treated "card is a `<button>`" as "still installable" (a pending card is a `<button>` because it withdraws), and it counted install buttons page-wide while two other systems legitimately stayed installable. Fixed to read the dictionary the page actually uses and to scope the assertion to the target card. **20/20.** Its cleanup also raced a transient Windows lock on the freshly cloned folder and failed the run after every check had passed; it now retries instead of turning a green run red.
+
+### The lesson, because it is the same bug four times
+Platform, dental demo, opencode server, and the earlier 524 were all *"a process that nothing was responsible for keeping alive."* The watchdog only asks whether `:3100` is listening, so it cannot see a half-written `.next`, a dead `:3106`, or a dead `:4097`. Fixing this properly means: every process under one supervisor, a watchdog that health-checks the **public URL** rather than a port, and a production `.next` that a development build can never overwrite. Not implemented — the owner asked for it explicitly and it is the next milestone.
+
+---
+
 ## 2026-10-08 — THE LIVE DENTAL DEMO STILL SHOWED ENGLISH ON THE DASHBOARD (implemented, verified)
 
 **The report:** `https://bosc.dpdns.org/demo/dental/dashboard` logged in with an Arabic sidebar but English widgets ("Total Patients", "Today's Appointments", raw status "SCHEDULED").
@@ -816,6 +890,25 @@ constraints. A separate decision, not taken unilaterally here.
 
 Everything below is NOT YET IMPLEMENTED. Updated continuously; entries removed only when their milestone's verifiable goals pass.
 
+### RESOLVED 2026-10-10 — pharmacy is on GitHub; the abandoned submodule is gone
+
+Directive: "connect demo system and real system to github so if i want to edit any thing i can commit to github." Scope confirmed with the owner as the **templates** (`system/`, `demo-systems/`) — not the per-org clones under `orginazition/`, which stay gitignored by design because `installSystemForOrg` re-clones them from the template and a commit made there does not survive a rebuild.
+
+Supersedes the caveat in the 2026-10-08 pharmacy entry above ("`.gitmodules` declares `public/pharmacy` as a submodule … the declaration is stale … Nothing was committed"). Both trees are now tracked (`f85271e`), the stale declaration is deleted (`447fc4d`), and `git -C system/pharmacy status` exits 0 instead of `fatal: not a git repository`. Full detail in the 2026-10-10 entry.
+
+### Open 2026-10-10 — the grocery demo is a fork of the grocery system, and nothing noticed
+
+Found by `scripts/system-template-drift.ts` while fixing pharmacy, and **not fixed here** — reconciling two forks is a decision about intent per file, not a diff.
+
+- `demo-systems/grocery/src` is missing 7 files the template has: `app/api/bos/{credentials,link,health}/route.ts`, `lib/{app-url,pwa,ttl}.ts`, `shared/auth/dev-login.ts`. The `/api/bos/*` routes are the platform→system session link, so the demo has no host-link path at all.
+- 24 shared files differ, including `features/shell/{sidebar,nav-config,notifications-bell,topbar,voice-dictation}.tsx`, `features/sales/ui/pos-terminal.tsx`, `features/auth/{actions,service}.ts`, `features/customers/ui/image-view.tsx`, `features/notifications/service.ts`, `features/reports/ui/report-shell.tsx`, `shared/db.ts`, `app/(app)/layout.tsx`, `app/manifest.ts`.
+- *Goal:* `/demo/grocery` serves the same `src` as `system/grocery`, and `npx tsx scripts/system-template-drift.ts` prints `OK grocery`. **Blocked on:** knowing which of the 24 differences are deliberate demo behaviour (demo database, seeded credentials) before overwriting them.
+- The same script reports pharmacy's 2 (`app/api/bos/link/route.ts`, `app/api/health/route.ts`) — the demo copy predates the M1 work that made pharmacy a real system.
+
+### Open 2026-10-10 — `.gitignore` carries an uncommitted change that is not mine
+
+`.next-phone/` was added and verified (`git check-ignore -v` → `.gitignore:96`), but the file also holds an 8-line block (`releases/`, `.next-staging/`, `.data/`) that arrived from other work describing the untracked `scripts/serve.mjs` / `scripts/deploy.mjs`. Committing `.gitignore` now would carry that block without the scripts it describes. *Goal:* one commit that lands the release-artifact ignores together with the deploy pipeline that produces them.
+
 ### RESOLVED 2026-10-09 — dev parity: `npm run dev` shows exactly what the production site shows
 
 Directive: opening `npm run dev` should serve the same experience as `https://bosc.dpdns.org/` — Arabic/RTL shell, working sign-in, demo apps under `/demo/*`.
@@ -835,6 +928,16 @@ Directive: pharmacy must become a real, cloneable system **and** still offer its
 - **M3 — demo app live:** copied `D:\new project\pharmacy` → `public/pharmacy` (robocopy; excluded node_modules/.vercel/tsbuildinfo/.env.local, kept `.env`), `npm install` (594 pkgs), `npx prisma migrate deploy` into schema `pharmacy` (DB `demo`, migration `20260915164848_init`), seeded with `npx tsx prisma/seed.ts` **after adding `PGSCHEMA="pharmacy"` to its `.env`** (Prisma 7 has no `db seed`, and the app reads `PGSCHEMA ?? "public"`). **Build blocker:** Turbopack inferred the repo root as workspace root (the outer `package-lock.json`) and compiled the platform's own `src/instrumentation.ts` into the demo → fixed by pinning `turbopack.root` to the app dir, the same pattern `demo-systems/dental|grocery` already use. Running under pm2 as `pharmacy-demo` (`next start -p 5000`), `pm2 save`d. `PHARMACY_URL=http://localhost:5000` added BOM-less to `.env.local`; the `BUSINESS_SYSTEMS` pharmacy card flipped `SOON → LIVE("pharmacy")` (route `/pharmacy`).
 - **M4 — live card proof:** new `scripts/pharmacy-demo-check.ts` (**11/11**) against the public site: `/demo` lists pharmacy as a live system linking to `/pharmacy`, the mount serves the real app (`الصيدلية | نظام إدارة الصيدليات`, password field, **no** Business OS fallback), a fresh probe org sees pharmacy `installable`, and its marketplace card reads **طلب النظام** with **no** قريباً label. The probe signs up in-page, so it runs against `https://bosc.dpdns.org` (Better Auth trusts that origin, not localhost — see the new orphan below).
 - **Caveats logged:** `.gitmodules` declares `public/pharmacy` as a submodule (github `gmsnow/pharmacy`) but the superproject index has **no gitlink** — the declaration is stale; the populated app is a standalone untracked folder (own `.git`), consistent with how these sources are treated at runtime. Nothing was committed. Dental's hardcoded `basePath: "/dental"` remains a pre-existing contract defect, untouched.
+
+### Open 2026-10-09 — the platform must survive a bad build, and one supervisor must own every process (requested by the owner, not implemented)
+
+Four separate outages in one week had one cause: a process nothing was responsible for keeping alive. On 2026-10-09 alone the platform, the dental demo and the OpenCode server were all down at the same time, and the owner reported it as "3D, the notifications button, the user button and a lot of functionality stopped". Goals, each with one verifiable success criterion:
+
+1. **One supervisor owns every process.** `:3100` platform, `:3101` grocery, `:3106` dental, `:5000` pharmacy, `:4096`/`:4097` opencode under one pm2 ecosystem + `pm2 save`. *Success:* after a reboot and one sign-in, every port is listening with no manual `Start-Process`.
+2. **The watchdog health-checks the public URL, not the port.** `scripts/platform-watchdog.ps1` currently asks only whether `:3100` is listening, which is why it stayed silent through a half-written `.next` and two dead neighbours. *Success:* with the platform serving a broken `.next`, the watchdog restores a known-good build without a human.
+3. **A development build can never overwrite production.** `next build` writes the same `.next` the live server reads. *Success:* running a full build while `:3100` serves leaves the live site answering 200 throughout.
+4. **Auto-start and open the site on boot.** Nothing currently starts the platform at boot, and nothing opens a browser. *Success:* after a cold boot, `https://bosc.dpdns.org` answers 200 with no manual step. (pm2 resurrects at *sign-in*, not at boot — the boot task and the login task are different mechanisms and only the second one runs today.)
+5. **`boot-bootstrap.ps1` still launches the retired `bin\opencode-server.cmd`**, which dies instantly under the boot task's account because it resolves the binary through `%APPDATA%`. It should launch `bin\opencode-launch.js` (loopback `:4097`) like the rest. *Success:* the boot log shows `:4097` listening.
 
 ### Open 2026-10-08 — `scripts/my-apps-catalog-check.ts` is stale (fails its own baseline, pre-existing)
 
@@ -2897,4 +3000,4 @@ Fix, by request: built `demo-systems/dental` with `next build --webpack` and rep
 
 ### Orphans & pending (additions)
 - `npm run dev`'s `dev:dental` can no longer bind `:3106` while a production dental owns it; `dev.ts` treats demo scripts as non-critical, so the dev environment still boots. A `DENTAL_URL` override pointing dev at a separate port is the durable answer, left as a follow-up.
-- The production dental on `:3106` was started with a manual detached `Start-Process`; it is not yet supervised, so it will not survive a reboot by itself.
+- ~~The production dental on `:3106` was started with a manual detached `Start-Process`; it is not yet supervised, so it will not survive a reboot by itself.~~ **RESOLVED 2026-10-09** — this orphan is exactly why dental's 3D and bell "stopped working" on 2026-10-09: the machine rebooted at 01:33 and nothing brought `:3106` back. It is now a pm2 app (`dental-demo`) and `pm2 save` has been run.
