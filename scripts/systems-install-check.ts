@@ -4,6 +4,7 @@ import { rmSync } from "node:fs";
 import puppeteer from "puppeteer-core";
 import { prisma } from "@/core/db/client";
 import { BUSINESS_SYSTEMS } from "@/core/demo/business-systems-data";
+import { dictionaries } from "@/core/i18n/dictionaries";
 import { listSystemSources } from "@/core/org-vault/system-sources";
 import { installableCardIds } from "@/core/systems/catalog";
 import { installSystemForOrg } from "@/core/apps/service";
@@ -38,13 +39,20 @@ import { orgVaultPaths } from "@/core/org-vault/paths";
 const BASE = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "https://bosc.dpdns.org";
 const PW = "Sodb!123456789";
 
+// Labels come from the dictionary, not from memory. `/systems` renders
+// `business-systems-section`, which reads `platform.catalog.*`; the first
+// version of this check hardcoded `platform.marketplace` wording (a different
+// component) and reported failures against a page that was working — a false
+// failure pointing at working code, the most expensive kind.
+const CATALOG = dictionaries.ar.platform.catalog;
+
 const AR = {
-  installNow: "ثبّت الآن",
-  pending: "بانتظار الموافقة",
-  pendingBadge: "قيد الموافقة",
-  installedBadge: "مثبّت",
-  open: "افتح النظام",
-  soon: "قريباً",
+  installNow: CATALOG.installNow,
+  pending: CATALOG.pending,
+  pendingBadge: CATALOG.pending,
+  installedBadge: CATALOG.installed,
+  open: CATALOG.openSystem,
+  soon: CATALOG.comingSoon,
 };
 
 let passed = 0;
@@ -282,24 +290,22 @@ const page = await browser.newPage();
     check("the card reads as waiting for approval", sawPending, `looking for "${AR.pending}"`);
 
     // 4. Re-requesting is idempotent, so a second click cannot spam the queue.
+    //    A pending card is still a <button> — it now withdraws the request — so
+    //    the tag tells us nothing; what matters is whether the install
+    //    affordance is gone from the card's own text.
     const second = await page.evaluate(
       (input: { label: string; name: string }) => {
         const own = Array.from(document.querySelectorAll(".demo-card")).find((c) =>
           (c.textContent || "").includes(input.name),
         );
-        const btn =
-          own?.tagName === "BUTTON"
-            ? (own as HTMLButtonElement)
-            : own
-              ? Array.from(own.querySelectorAll("button")).find((b) => (b.textContent || "").includes(input.label))
-              : undefined;
-        return btn ? "still clickable" : "not clickable";
+        if (!own) return "card missing";
+        return (own.textContent || "").includes(input.label) ? "still offers install" : "no install affordance";
       },
       { label: AR.installNow, name: card.nameAr },
     );
     check(
       "a queued system offers no second install button",
-      second === "not clickable",
+      second !== "still offers install",
       `re-render state=${second}`,
     );
 
@@ -383,10 +389,19 @@ const page = await browser.newPage();
           after2.href === `/${org.slug}/${target}`,
           `href=${after2.href}`,
         );
+        const targetCardStillOffersInstall = await page.evaluate(
+          (input: { label: string; name: string }) => {
+            const own = Array.from(document.querySelectorAll(".demo-card")).find((c) =>
+              (c.textContent || "").includes(input.name),
+            );
+            return own ? (own.textContent || "").includes(input.label) : false;
+          },
+          { label: AR.installNow, name: card.nameAr },
+        );
         check(
           "an installed system offers no install button",
-          (await page.evaluate((l: string) => document.body.innerText.split(l).length - 1, AR.installNow)) === 0,
-          `remaining "${AR.installNow}"`,
+          !targetCardStillOffersInstall,
+          `target card "${card.nameAr}" shows "${AR.installNow}": ${targetCardStillOffersInstall}`,
         );
 
         // 7. The install row is what the profile tab lists.
@@ -408,11 +423,29 @@ const page = await browser.newPage();
   } finally {
     await browser.close();
     // The vault folder and the registry entry too. Approving runs
-    // `installSystemForOrg`, which registers the org and clones 324 files into
+    // `installSystemForOrg`, which registers the org and clones its system into
     // `orginazition/<slug>/`, and deleting only the database rows leaves both
     // behind — a run that leaves a folder per execution is not a run anybody
     // runs twice.
-    rmSync(orgVaultPaths(org.slug).root, { recursive: true, force: true });
+    //
+    // Just after a fresh clone the folder is briefly held (Windows Defender
+    // scanning 573 new files, or a supervisor noticing the registry change), so
+    // `rmSync` races that handle and throws EPERM. Retry for a bounded window;
+    // the folder is always removable seconds later, and a cleanup that fails
+    // must not turn a passing run red.
+    const vaultRoot = orgVaultPaths(org.slug).root;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      try {
+        rmSync(vaultRoot, { recursive: true, force: true });
+        break;
+      } catch (err) {
+        if (attempt === 29) {
+          console.warn(`[warn] could not remove ${vaultRoot} after retries: ${(err as Error).message}`);
+        } else {
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      }
+    }
 
     await prisma.organizationApp.deleteMany({ where: { organizationId: org.id } });
     await prisma.organizationAppRequest.deleteMany({ where: { organizationId: org.id } });

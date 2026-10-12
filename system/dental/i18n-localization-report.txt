@@ -1,0 +1,19 @@
+﻿I18N LOCALIZATION REPORT
+========================
+
+(a) Files changed:
+- src/app/(app)/patients/page.tsx
+- src/app/(app)/patients/[id]/page.tsx
+- src/app/(app)/invoices/page.tsx
+- src/app/(app)/invoices/[id]/page.tsx
+- src/app/(app)/payments/page.tsx
+- src/app/(app)/installments/page.tsx
+- src/app/(app)/installments/[id]/page.tsx
+- src/app/print/invoices/[id]/page.tsx
+- src/components/patients/patient-table.tsx
+
+(b) I18N-MISSING keys:
+- patients.emptyHint: "Try adjusting your search or filters" / "جرّب تعديل البحث أو التصفية"
+
+(c) Files not fully localized and why:
+- All listed files have been processed; some components in the list may contain dynamic strings requiring further key additions - only one explicit missing marker left. No new keys added to dictionary as per rules. Typecheck and eslint pass for all listed files.

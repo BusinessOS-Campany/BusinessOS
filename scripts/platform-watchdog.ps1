@@ -15,7 +15,12 @@ param(
   [int]$BootGraceSec = 180,
   [int]$StartWaitSec = 90,
   [switch]$Check,
-  [switch]$DryRun
+  [switch]$DryRun,
+  # Promote a release from `releases/` to active, restart into it, and roll back
+  # to the previous release if it does not become healthy. This is how a deploy
+  # switches over: the build never touches the directory the server is reading,
+  # so the only downtime is this restart, not the build.
+  [string]$ActivateRelease = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,7 +30,9 @@ if (-not $WorkingDirectory) { $WorkingDirectory = Split-Path -Parent $PSScriptRo
 $DataDir = Join-Path $WorkingDirectory ".data"
 $StateFile = Join-Path $DataDir "watchdog.state.json"
 $LogFile = Join-Path $DataDir "watchdog.log"
-$BuildIdFile = Join-Path $WorkingDirectory ".next\BUILD_ID"
+$ReleasesFile = Join-Path $DataDir "releases.json"
+$ReleasesDir = Join-Path $WorkingDirectory "releases"
+$LegacyBuildIdFile = Join-Path $WorkingDirectory ".next\BUILD_ID"
 $ServeOut = Join-Path $DataDir "prod.out.log"
 $ServeErr = Join-Path $DataDir "prod.err.log"
 $BuildLog = Join-Path $DataDir "watchdog-build.log"
@@ -56,18 +63,64 @@ function Save-State {
   [System.IO.File]::WriteAllText($StateFile, $json, (New-Object System.Text.UTF8Encoding($false)))
 }
 
+# ── releases ────────────────────────────────────────────────────────────────
+# `active` is the release `npm run serve` starts (scripts/serve.mjs reads this
+# same file). `previous` is what a rollback returns to. The release a build
+# produces is verified and promoted BEFORE it is named here, so a failed deploy
+# never leaves the server pointing at a build nobody has run.
+
+function Get-ReleaseState {
+  if (Test-Path -LiteralPath $ReleasesFile) {
+    try { return (Get-Content -LiteralPath $ReleasesFile -Raw | ConvertFrom-Json) } catch { }
+  }
+  return [pscustomobject]@{ active = ""; previous = ""; history = @() }
+}
+
+function Save-ReleaseState {
+  param($State)
+  $json = $State | ConvertTo-Json -Depth 4
+  [System.IO.File]::WriteAllText($ReleasesFile, $json, (New-Object System.Text.UTF8Encoding($false)))
+}
+
+function Get-ReleaseDir {
+  param([string]$Id)
+  if (-not $Id) { return $null }
+  $dir = Join-Path $ReleasesDir $Id
+  if (-not (Test-Path -LiteralPath (Join-Path $dir "BUILD_ID"))) { return $null }
+  return $dir
+}
+
+# The build output that is actually live. When a release is active its BUILD_ID
+# is the one that matters: the old check asked about `.next`, which is just a
+# build artifact now, and it is why a deploy could leave the watchdog convinced
+# the site was fine while it was serving nothing.
+function Get-LiveBuildIdFile {
+  $state = Get-ReleaseState
+  $dir = Get-ReleaseDir -Id $state.active
+  if ($dir) { return (Join-Path $dir "BUILD_ID") }
+  return $LegacyBuildIdFile
+}
+
 function Test-Platform {
   $url = "http://127.0.0.1:$Port$ProbePath"
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
   try {
     $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec $TimeoutSec -ErrorAction Stop
     $sw.Stop()
-    return [pscustomobject]@{ Ok = $true; Status = [int]$resp.StatusCode; Ms = [int]$sw.ElapsedMilliseconds; Detail = "HTTP $($resp.StatusCode)" }
+    return [pscustomobject]@{ Ok = $true; Status = [int]$resp.StatusCode; Ms = [int]$sw.ElapsedMilliseconds; Detail = "HTTP $([int]$resp.StatusCode)" }
   } catch {
     $sw.Stop()
     $gotResponse = $null -ne $_.Exception.Response
     if ($gotResponse) {
       $code = [int]$_.Exception.Response.StatusCode
+      # A 4xx is the application answering on purpose (a redirect to /signin, a
+      # 404 on a path it does not own) and the process is demonstrably serving.
+      # A 5xx is not: that is the server up and failing, which is precisely the
+      # state this watchdog exists to notice. Treating it as healthy is what let
+      # the 2026-10-09 outage sit there while the process was "running".
+      if ($code -ge 500) {
+        return [pscustomobject]@{ Ok = $false; Status = $code; Ms = [int]$sw.ElapsedMilliseconds; Detail = "HTTP $code (server error)" }
+      }
       return [pscustomobject]@{ Ok = $true; Status = $code; Ms = [int]$sw.ElapsedMilliseconds; Detail = "HTTP $code (app-level, process is serving)" }
     }
     return [pscustomobject]@{ Ok = $false; Status = 0; Ms = [int]$sw.ElapsedMilliseconds; Detail = $_.Exception.Message }
@@ -172,8 +225,20 @@ function Stop-Platform {
 }
 
 function Start-Platform {
+  # `SERVE_RELEASE` is set in this process's environment just before the call and
+  # inherited by cmd.exe and then by scripts/serve.mjs. PowerShell 5.1's
+  # Start-Process has no -Environment, and the release has to be named at start
+  # time: `.data/releases.json` is only updated once the new release has proved
+  # it can serve, so it cannot be the thing that selects it.
   $arg = "/c $StartCommand >> `"$ServeOut`" 2>> `"$ServeErr`""
   Start-Process -FilePath "cmd.exe" -ArgumentList $arg -WorkingDirectory $WorkingDirectory -WindowStyle Hidden | Out-Null
+}
+
+function Start-PlatformRelease {
+  param([string]$Id)
+  if ($Id) { $env:SERVE_RELEASE = $Id } else { Remove-Item Env:\SERVE_RELEASE -ErrorAction SilentlyContinue }
+  Start-Platform
+  if ($Id) { Remove-Item Env:\SERVE_RELEASE -ErrorAction SilentlyContinue }
 }
 
 function Start-Build {
@@ -183,9 +248,19 @@ function Start-Build {
 
 function Wait-Healthy {
   $deadline = (Get-Date).AddSeconds($StartWaitSec)
+  # A process that has exited will never become healthy, so waiting out the full
+  # window only adds downtime before the rollback. Give it a few probes to bind
+  # (a real start is ready in well under a second) and then stop waiting.
+  $deadNoPort = 0
   while ((Get-Date) -lt $deadline) {
     $probe = Test-Platform
     if ($probe.Ok) { return $probe }
+    if (Get-PortOwner) {
+      $deadNoPort = 0
+    } else {
+      $deadNoPort++
+      if ($deadNoPort -ge 4) { return $null }
+    }
     Start-Sleep -Seconds 3
   }
   return $null
@@ -201,6 +276,62 @@ function Get-AgeSeconds {
 
 $state = Read-State
 $probe = Test-Platform
+
+# ── activation and rollback ─────────────────────────────────────────────────
+# Reached only when a deploy asks for it. The restart and the health wait are the
+# same Stop-Platform/Start-Platform/Wait-Healthy used by the health path below,
+# so a switchover cannot behave differently from a crash recovery.
+if ($ActivateRelease) {
+  $target = Get-ReleaseDir -Id $ActivateRelease
+  if (-not $target) {
+    Write-Log "ERROR" "cannot activate release '$ActivateRelease': no BUILD_ID in releases\$ActivateRelease"
+    exit 1
+  }
+  $rel = Get-ReleaseState
+  $from = $rel.active
+  Write-Log "INFO" "activating release $ActivateRelease (state said '${from}')"
+
+  if ($DryRun) {
+    Write-Log "INFO" "DRYRUN: would restart into release $ActivateRelease"
+    exit 0
+  }
+
+  # Start the server on the new release WITHOUT committing it to the state file.
+  # If this release is broken, nothing has recorded it as good and the previous
+  # release is still the one the state file names.
+  $null = Stop-Platform
+  Start-PlatformRelease -Id $ActivateRelease
+  $healthy = Wait-Healthy
+  if ($healthy) {
+    $rel.previous = $from
+    $rel.active = $ActivateRelease
+    $rel.history = @($ActivateRelease, $from) + @($rel.history) | Where-Object { $_ } | Select-Object -Unique
+    Save-ReleaseState $rel
+    Write-Log "INFO" "release $ActivateRelease is serving ($($healthy.Detail))"
+    exit 0
+  }
+
+  # The new build does not come up. Put back what was serving a minute ago
+  # rather than leaving the site down waiting for a human.
+  Write-Log "ERROR" "release $ActivateRelease did not become healthy, rolling back"
+  $fallback = if ($from) { Get-ReleaseDir -Id $from } else { $null }
+  if (-not $fallback) {
+    Write-Log "ERROR" "no usable previous release to roll back to; manual intervention required"
+    exit 1
+  }
+  $null = Stop-Platform
+  Start-PlatformRelease -Id $from
+  $restored = Wait-Healthy
+  # Committed only now, and only to what is actually serving.
+  $rel.active = $from
+  Save-ReleaseState $rel
+  if ($restored) {
+    Write-Log "INFO" "rolled back to release $from ($($restored.Detail))"
+    exit 1
+  }
+  Write-Log "ERROR" "rollback to $from also failed; manual intervention required"
+  exit 1
+}
 
 if ($Check) {
   if ($probe.Ok) { Write-Host "healthy: $($probe.Detail) in $($probe.Ms)ms"; exit 0 }
@@ -243,7 +374,8 @@ if ($age -ge 0 -and $age -lt $BootGraceSec) {
   exit 0
 }
 
-if (-not (Test-Path -LiteralPath $BuildIdFile)) {
+$liveBuildIdFile = Get-LiveBuildIdFile
+if (-not (Test-Path -LiteralPath $liveBuildIdFile)) {
   if (Test-BuildRunning) {
     Write-Log "WARN" "build output missing and a build is already running, waiting"
     exit 0
@@ -254,15 +386,16 @@ if (-not (Test-Path -LiteralPath $BuildIdFile)) {
     Write-Log "ERROR" "build output missing and 3 rebuilds already attempted, giving up - manual intervention required"
     exit 1
   }
-  Write-Log "ERROR" "build output missing at $BuildIdFile, starting a rebuild ($([int]$state.Rebuilds + 1)/3)"
-  $stopped = Stop-Platform
-  if ($stopped) { Write-Log "INFO" "stopped pids: $stopped" }
+  # Do NOT stop the platform to rebuild it. A missing BUILD_ID is a fact about a
+  # directory, not about a process, and stopping a server that is answering in
+  # order to rebuild is how a stale-artifact check turns into an outage. The
+  # rebuild is best-effort and the restart below is what actually acts.
+  Write-Log "ERROR" "live build output missing at $liveBuildIdFile, starting a rebuild ($([int]$state.Rebuilds + 1)/3)"
   Start-Build
   $state.Rebuilds = [int]$state.Rebuilds + 1
   $state.LastAction = "rebuild"
-  $state.LastDetail = "build output was missing"
+  $state.LastDetail = "live build output was missing"
   Save-State $state
-  exit 1
 }
 $state.Rebuilds = 0
 

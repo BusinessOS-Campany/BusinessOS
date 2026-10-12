@@ -1,0 +1,13 @@
+﻿I18N LOCALIZATION REPORT (follow-up)
+=====================================
+
+(a) Files changed:
+- src/app/(app)/invoices/[id]/page.tsx
+- src/app/(app)/expenses/page.tsx
+- src/components/expenses/expense-form-dialog.tsx
+- src/components/expenses/delete-expense-button.tsx
+- src/app/print/invoices/[id]/page.tsx
+
+(b) I18N-MISSING keys: none new added; previous markers unchanged.
+
+(c) Notes: fixed critical bug, converted remaining ternaries, localized new files. Typecheck and eslint pass.

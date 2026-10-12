@@ -162,6 +162,17 @@ export const DEMO_SYSTEMS: readonly DemoSystem[] = [
     nameAr: "نظام عيادة العيون",
     nameEn: "Optometry Clinic",
   }),
+  system({
+    slug: "clinicos",
+    port: 3110,
+    envVar: "CLINICOS_URL",
+    sourceDir: "demo-systems/clinicos",
+    devScript: "dev:clinicos",
+    stack: "Next.js standalone",
+    status: "live",
+    nameAr: "نظام كلينيكوس",
+    nameEn: "ClinicOS System",
+  }),
 ];
 
 /** Systems served under the `/demo` namespace, in registry order. */

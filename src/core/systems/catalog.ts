@@ -319,7 +319,9 @@ export const DEMO_CATALOG_META: readonly CatalogSeedMeta[] = [
     descriptionAr: "المخزون الدوائي والوصفات والمنتجات وفواتير الصيدلية.",
     icon: "pill",
     category: "health",
-    version: "1.0.0-demo",
+    // Same bargain as dental above: `system/pharmacy/` exists, so an org clones
+    // and owns this one, and `1.0.0-demo` would be printed on a running clone.
+    version: "1.0.0",
     routePrefix: "/pharmacy",
   },
   {

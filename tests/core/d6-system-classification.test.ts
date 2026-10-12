@@ -60,6 +60,11 @@ describe("D6: per-org source is not the same fact as having an in-shell module",
     const sources = await listSystemSources();
     expect(sources).toContain("dental");
     expect(systemKind("dental", sources)).toBe("real");
+    // Pharmacy moved from demo-only to this same shape when `system/pharmacy/`
+    // landed, so it asserts the flip rather than only dental's pre-existing state.
+    expect(sources).toContain("pharmacy");
+    expect(systemKind("pharmacy", sources)).toBe("real");
+    expect(openRouteForOrgSlug("pharmacy", "acme", sources)).toBe("/acme/pharmacy");
   });
 
   it("routes an org to its OWN copy of dental, not to the public demo", async () => {
@@ -69,9 +74,11 @@ describe("D6: per-org source is not the same fact as having an in-shell module",
 
   it("still classifies a demo-only system as demo and leaves it on its own route", async () => {
     const sources = await listSystemSources();
-    expect(sources).not.toContain("pharmacy");
-    expect(systemKind("pharmacy", sources)).toBe("demo");
-    expect(openRouteForOrgSlug("pharmacy", "acme", sources)).toBe("/pharmacy");
+    // `hospital` is the demo-only exemplar now that pharmacy has a source: no
+    // `system/hospital/` to clone, and a demo mount at `/hospital`.
+    expect(sources).not.toContain("hospital");
+    expect(systemKind("hospital", sources)).toBe("demo");
+    expect(openRouteForOrgSlug("hospital", "acme", sources)).toBe("/hospital");
   });
 
   it("leaves an in-shell module on /app/<slug> when no org is known", async () => {
@@ -134,9 +141,18 @@ describe("D6: marketplace for a cloneable per-org system", () => {
 
   it("leaves a demo-only system's card alone", async () => {
     const market = await getCustomerMarketplace(orgA, userA);
+    const hospital = market.find((m) => m.slug === "hospital");
+    expect(hospital?.kind).toBe("demo");
+    expect(hospital?.state).toBe("demo");
+  });
+
+  it("offers pharmacy's card as an install, exactly like dental", async () => {
+    const market = await getCustomerMarketplace(orgA, userA);
     const pharmacy = market.find((m) => m.slug === "pharmacy");
-    expect(pharmacy?.kind).toBe("demo");
-    expect(pharmacy?.state).toBe("demo");
+    expect(pharmacy?.kind).toBe("real");
+    expect(pharmacy?.state).toBe("installable");
+    // Not installed, so no route — the same bargain dental's card makes.
+    expect(pharmacy?.route).toBeNull();
   });
 });
 

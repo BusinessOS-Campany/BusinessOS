@@ -86,3 +86,12 @@ prod.out.log
 # own our fork changes (basePath, SYSTEM_BASE_PATH, schema wiring); the upstream
 # commits are still on GitHub. Restore the name to get the clone back.
 **/.git.vendor-backup/
+
+# Immutable production releases. `next build` writes `.next-staging`, the deploy
+# pipeline verifies it and promotes it to `releases/<BUILD_ID>/`, and
+# `npm run serve` starts whatever `.data/releases.json` names active. Keeping
+# these out of git: they are build output, and each release is ~1.7 GB.
+releases/
+.next-staging/
+.next-phone/
+.data/

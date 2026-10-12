@@ -164,6 +164,57 @@ A template and its demo are the same application, and nothing in the product mak
 
 ---
 
+## 2026-10-10 — THE PLATFORM CANNOT BE TAKEN DOWN BY A BUILD OR BY A NEW SYSTEM ANY MORE (implemented, verified)
+
+**The request:** "never down the platform even if I add a new system — make guards that prevent error." It followed the 2026-10-09 outage, where a build taking six minutes took the whole public site down with it.
+
+### The structural fault
+`next start` served from `<repo>\.next`, and `next build` writes to `<repo>\.next`. Building while the server was up replaced the files customers were being served; a build interrupted or run over a live server produced a `.next` the server could not read, and every public route answered 502. The watchdog could not see it, because of the next fault.
+
+### G1 — a build can no longer touch what is being served
+`next.config.ts` already read `NEXT_DIST_DIR`, which made this a directory rename rather than an architectural change. Now:
+- `.next-staging/` — what a build writes. **The running server never reads it.**
+- `releases/<BUILD_ID>/` — a verified build, promoted under a name nothing points at yet.
+- `.data/releases.json` — names the active release; `scripts/serve.mjs` reads it.
+
+`npm run serve` is now `scripts/serve.mjs`, so every start path (watchdog, boot task, a human) serves the same release. One environment override, `SERVE_RELEASE`, exists because the state file cannot both select a release and record that it worked — see the bug recorded below.
+
+### G2 — a bad release rolls itself back
+`scripts/deploy.mjs`: build → verify the staged build on a spare port (`:3199`) → promote → hand the switch to the watchdog, which restarts into it and health-checks. A release that does not come up is rolled back to the previous one automatically. The deploy command exits non-zero so nothing mistakes a rollback for a success.
+
+### G3 — the watchdog now means "healthy"
+`Test-Platform` returned `Ok = true` for **any** HTTP response, so a platform answering 502 or 500 was recorded as "process is serving" and left alone. A 4xx still counts as healthy (the app answering on purpose); **5xx is now unhealthy**, which is the state the watchdog exists to notice.
+It also asked about `.next\BUILD_ID` — a build artifact — and would **stop the platform** in order to rebuild it when that file was absent. It now checks the live release's `BUILD_ID` and never stops a running server to rebuild. `Wait-Healthy` gives up after ~12s when nothing holds the port, instead of waiting out the full window for a process that already exited.
+
+### G4 — adding a system can no longer break anything
+`systemContract(slug).missing` was asserted only for `dental` and `pharmacy` **by name**. A new system with an incomplete contract passed CI and then degraded every install into an approval request that never resolves — which is exactly what dental was. Two blanket tests now hold **every** folder under `system/` to the whole contract, and assert that a system's default `basePath` matches its slug.
+
+Proved by dropping an incomplete system into `system/`: the suite fails naming every missing item, instead of the card quietly failing for a customer later.
+
+### G5 — one owner per port, and the laptop comes up by itself
+`ecosystem.config.cjs` now defines every service behind the platform: `grocery-demo` (3101), `dental-demo` (3106), `pharmacy-demo` (5000), `opencode-server` (4097) and `opencode-guard` (4096). **`businessos-erp` was deliberately removed from it** — the watchdog owns 3100, because it is the component that can roll a bad release back, and two supervisors on one port is a race in which the second starter gets `EADDRINUSE` and restart-loops.
+`scripts/boot-start.ps1` (Scheduled Task `BusinessOS-BootStart`, at logon +45s) waits for the network, reconciles the pm2 ecosystem, starts the platform if it is not listening, verifies the public URLs, and opens `https://bosc.dpdns.org`. It runs as `GMSNOW`/Interactive because **pm2's process list is per-user**: a SYSTEM task would start a different, empty pm2.
+
+### Verified
+- **A full build while serving: 98 probes of the public `/demo` over 21 minutes, 0 non-200.** Build, verify, promote and switchover all happened underneath a live site. This is the criterion that was impossible before.
+- **Rollback: a release with a `BUILD_ID` and no bundle was activated deliberately.** Detected, rolled back, exit 1, 29.2s total, site 200 throughout the recovery.
+- **Cold boot: 0 of 6 ports up → 6 of 6 up, every public surface 200, in 26.8s** after `pm2 stop all` plus killing the platform — the state the 2026-10-09 reboot left behind.
+- `npm test` **786/786** across 64 files; `tsc --noEmit` clean; `systems-install-check` **20/20** and `pharmacy-demo-check` **11/11**, both exit 0, both leaving no probe folders behind.
+
+### Three bugs this work found in itself, recorded because each looked like a pass
+1. **Activation was a no-op.** The deploy wrote `releases.json` *before* switching, so the watchdog saw "already active" and skipped the restart while a different build was serving. State and reality had diverged. Fixed by passing the release at start time (`SERVE_RELEASE`) and committing the state file only after the server answers from it.
+2. **A `.ps1` path with a space in it.** `spawn(..., { shell: true })` re-split `D:\Business OS\...\platform-watchdog.ps1` at the space, so the watchdog was never invoked and the switch silently failed. `shell` is now opt-in per command: npm needs it (`npm.cmd`), a real executable with spaces must not have it.
+3. **A network probe that never succeeded**, because a wrapped array literal was being indexed as if it held host/port pairs. It cost the full 120s timeout on every boot of an always-online machine. Hashtables now.
+
+Also: `tsc` picked up Next's generated `types/validator.ts` inside `releases/`, and the resulting phantom `TS2307` on an unrelated file came from a stale `tsconfig.tsbuildinfo` — `releases` and `.next-staging` are now excluded, and the cache is not authoritative.
+
+### Not done, on purpose
+- **A release is never re-verified after activation.** The gate is a probe of `/signin`; a build that passes it can still fail on a route nobody requested. A deeper smoke set is the natural next step.
+- **`releases/` is never pruned across days** — `prune()` only runs at the end of a deploy. Three releases is ~5 GB of the 57 GB free, so it is not urgent, but a boot that never deploys accumulates.
+- **The phone-as-server migration is untouched** and still supersedes all of this the day the laptop stops being the host.
+
+---
+
 ## 2026-10-09 — THE WHOLE PLATFORM WENT 502, AND DENTAL'S 3D + BELL WENT WITH IT (fixed, verified, root-caused)
 
 **The report:** "dental is broken — 3D is not working any more, notifications/user button and a lot of functionality stopped." Nothing named dental was broken. Three separate processes had died, and two of them had no supervisor at all.
@@ -929,15 +980,11 @@ Directive: pharmacy must become a real, cloneable system **and** still offer its
 - **M4 — live card proof:** new `scripts/pharmacy-demo-check.ts` (**11/11**) against the public site: `/demo` lists pharmacy as a live system linking to `/pharmacy`, the mount serves the real app (`الصيدلية | نظام إدارة الصيدليات`, password field, **no** Business OS fallback), a fresh probe org sees pharmacy `installable`, and its marketplace card reads **طلب النظام** with **no** قريباً label. The probe signs up in-page, so it runs against `https://bosc.dpdns.org` (Better Auth trusts that origin, not localhost — see the new orphan below).
 - **Caveats logged:** `.gitmodules` declares `public/pharmacy` as a submodule (github `gmsnow/pharmacy`) but the superproject index has **no gitlink** — the declaration is stale; the populated app is a standalone untracked folder (own `.git`), consistent with how these sources are treated at runtime. Nothing was committed. Dental's hardcoded `basePath: "/dental"` remains a pre-existing contract defect, untouched.
 
-### Open 2026-10-09 — the platform must survive a bad build, and one supervisor must own every process (requested by the owner, not implemented)
+### RESOLVED 2026-10-10 — the platform must survive a bad build, and one supervisor must own every process
 
-Four separate outages in one week had one cause: a process nothing was responsible for keeping alive. On 2026-10-09 alone the platform, the dental demo and the OpenCode server were all down at the same time, and the owner reported it as "3D, the notifications button, the user button and a lot of functionality stopped". Goals, each with one verifiable success criterion:
+Implemented and verified; see the 2026-10-10 entry at the top of this file for the measurements. What landed: immutable releases (a build writes `.next-staging`, prod serves `releases/<id>`), verified promotion with automatic rollback, a watchdog that treats 5xx as unhealthy and never stops a live server to rebuild, blanket contract tests so a new system cannot break installs, one pm2 ecosystem for every service behind the platform, and a boot task that brings the whole stack up and opens the site. Cold boot measured at 26.8s from 0 of 6 ports to all 6 serving.
 
-1. **One supervisor owns every process.** `:3100` platform, `:3101` grocery, `:3106` dental, `:5000` pharmacy, `:4096`/`:4097` opencode under one pm2 ecosystem + `pm2 save`. *Success:* after a reboot and one sign-in, every port is listening with no manual `Start-Process`.
-2. **The watchdog health-checks the public URL, not the port.** `scripts/platform-watchdog.ps1` currently asks only whether `:3100` is listening, which is why it stayed silent through a half-written `.next` and two dead neighbours. *Success:* with the platform serving a broken `.next`, the watchdog restores a known-good build without a human.
-3. **A development build can never overwrite production.** `next build` writes the same `.next` the live server reads. *Success:* running a full build while `:3100` serves leaves the live site answering 200 throughout.
-4. **Auto-start and open the site on boot.** Nothing currently starts the platform at boot, and nothing opens a browser. *Success:* after a cold boot, `https://bosc.dpdns.org` answers 200 with no manual step. (pm2 resurrects at *sign-in*, not at boot — the boot task and the login task are different mechanisms and only the second one runs today.)
-5. **`boot-bootstrap.ps1` still launches the retired `bin\opencode-server.cmd`**, which dies instantly under the boot task's account because it resolves the binary through `%APPDATA%`. It should launch `bin\opencode-launch.js` (loopback `:4097`) like the rest. *Success:* the boot log shows `:4097` listening.
+Three items from the original list are still open and are recorded in that entry: no deep smoke set behind the release gate, no cross-day pruning of `releases/`, and `boot-bootstrap.ps1` in `C:\Users\GMSNOW\opencode-remote` still launching the retired `opencode-server.cmd` — harmless now that pm2 owns `opencode-server`, but it is dead weight in someone else's stack.
 
 ### Open 2026-10-08 — `scripts/my-apps-catalog-check.ts` is stale (fails its own baseline, pre-existing)
 

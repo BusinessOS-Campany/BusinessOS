@@ -96,6 +96,7 @@ const S: Seed[] = [
   { id: "physiotherapy", ara: "نظام مركز العلاج الطبيعي", en: "Physiotherapy Center System", descAr: "إدارة الجلسات والمواعيد والمرضى والمدفوعات للمركز الصحي.", descEn: "Sessions, appointments, patients and payments for physio centers.", cat: "health", icon: "activity", status: "available", live: "sama" },
   { id: "veterinary", ara: "نظام العيادة البيطرية", en: "Veterinary Clinic System", descAr: "إدارة الحيوانات والعلاجات والملفات والتطعيمات للعيادات البيطرية.", descEn: "Animals, treatments, records and vaccines for vet clinics.", cat: "health", icon: "paw", status: "soon" },
   { id: "optometry", ara: "نظام عيادة العيون", en: "Optometry / Eye Clinic System", descAr: "إدارة المرضى والفحوصات البصرية ووصفات النظارات والعدسات.", descEn: "Patients, eye exams, glasses and lens prescriptions.", cat: "health", icon: "eye", status: "available", live: "optometry" },
+  { id: "clinicos", ara: "نظام كلينيكوس", en: "ClinicOS System", descAr: "إدارة المرضى والمواعيد والمدفوعات والملفات الطبية للعيادات.", descEn: "Patients, appointments, payments and medical records for clinics.", cat: "health", icon: "stethoscope", status: "available", live: "clinicos" },
   { id: "diagnostic-center", ara: "نظام مركز التشخيص", en: "Diagnostic Center System", descAr: "إدارة الأشعة والفحوصات ونتائجها للمراكز التشخيصية.", descEn: "Imaging, tests and results for diagnostic centers.", cat: "health", icon: "heart", status: "soon" },
 
   // ── Retail & Shops (12) ────────────────────────────────────────────────────

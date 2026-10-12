@@ -12,12 +12,13 @@
  * while its catalog slug is `dental`, so `listSystemSources()` returned a slug
  * that no card could ever match and the install card was filtered out silently.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   hasSystemSource,
   listSystemSources,
+  systemContract,
   systemSessionCookie,
   systemSourceDir,
 } from "@/core/org-vault/system-sources";
@@ -43,6 +44,49 @@ describe("deployed system sources", () => {
     }
   });
 
+  it("satisfies the runtime contract for EVERY system on disk, not just the known ones", () => {
+    // This is the guard that makes adding a system safe.
+    //
+    // `installSystemForOrg` asks `systemContract(slug).missing` before it will
+    // clone anything, and a non-empty answer does not throw: the install quietly
+    // degrades into an approval request that never resolves. That is how dental
+    // spent a long time "installed but never open" - it hardcoded `basePath`
+    // while every other system read `SYSTEM_BASE_PATH`, and because the contract
+    // was only asserted for the systems we already knew about, CI stayed green.
+    //
+    // So the rule is deliberately not a list of expected systems. Any folder
+    // dropped into `system/` is held to the whole contract here, which means a
+    // half-finished new system fails the build instead of reaching customers as a
+    // card that cannot be opened.
+    const incomplete = sources
+      .map((slug) => ({ slug, missing: systemContract(slug).missing }))
+      .filter((entry) => entry.missing.length > 0);
+    expect(
+      incomplete,
+      `these systems cannot be served, so their installs would hang as pending requests: ${JSON.stringify(incomplete)}`,
+    ).toEqual([]);
+  });
+
+  it("mounts every system under the base path its own clone will be given", () => {
+    // A clone is started with `SYSTEM_BASE_PATH=/{org}/{slug}`, so a system that
+    // ignores the variable is served at a path its proxy does not forward to and
+    // every page and `/_next/static` request 404s. The contract can only see the
+    // variable being read; this asserts the default still matches the slug, so a
+    // system cannot read it and still default to the wrong mount.
+    for (const slug of sources) {
+      const dir = systemSourceDir(slug);
+      const configFiles = ["next.config.ts", "next.config.js", "next.config.mjs", "next.config.cjs"];
+      const config = configFiles
+        .map((file) => join(dir, file))
+        .find((file) => existsSync(file));
+      if (!config) continue; // vite-based systems are not mount-scoped this way
+      const source = readFileSync(config, "utf8");
+      const fallback = /SYSTEM_BASE_PATH[^]*?\?\?\s*["'`]([^"'`]+)["'`]/.exec(source);
+      if (!fallback) continue; // no default literal to disagree with
+      expect(fallback[1], `${slug}/ next.config.ts default basePath`).toBe(`/${slug}`);
+    }
+  });
+
   it("makes dental cloneable rather than merely present", () => {
     expect(hasSystemSource("dental")).toBe(true);
     expect(existsSync(join(systemSourceDir("dental"), "package.json"))).toBe(true);
@@ -55,6 +99,28 @@ describe("deployed system sources", () => {
       sourceSlugs: sources,
     });
     expect(ids.has("dental")).toBe(true);
+  });
+
+  it("makes pharmacy cloneable rather than merely present", () => {
+    expect(hasSystemSource("pharmacy")).toBe(true);
+    expect(existsSync(join(systemSourceDir("pharmacy"), "package.json"))).toBe(true);
+  });
+
+  it("gives pharmacy every file the runtime needs to serve a clone", () => {
+    // `systemContract` is exactly what the platform asks before it will boot an
+    // org's copy. A system missing one of these is still listed and still
+    // cloneable — it simply can never be served, which is the worst place for a
+    // card to end up: it offers an install that has no way to open.
+    expect(systemContract("pharmacy").missing).toEqual([]);
+  });
+
+  it("lets the pharmacy card pass the install gate", () => {
+    const ids = installableCardIds({
+      cardIds: ["pharmacy"],
+      activeSlugs: ["pharmacy"],
+      sourceSlugs: sources,
+    });
+    expect(ids.has("pharmacy")).toBe(true);
   });
 
   it("ships a demo twin for every repo-hosted real system", () => {
