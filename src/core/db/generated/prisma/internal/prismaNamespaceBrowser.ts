@@ -128,7 +128,14 @@ export const ModelName = {
   organizationAppRequest: 'organizationAppRequest',
   pinnedApp: 'pinnedApp',
   systemCredential: 'systemCredential',
-  userFollow: 'userFollow'
+  userFollow: 'userFollow',
+  githubInstallation: 'githubInstallation',
+  systemSource: 'systemSource',
+  systemEnvVar: 'systemEnvVar',
+  systemDeployment: 'systemDeployment',
+  systemDeploymentOrg: 'systemDeploymentOrg',
+  deploymentLog: 'deploymentLog',
+  githubWebhookDelivery: 'githubWebhookDelivery'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -1418,6 +1425,112 @@ export const UserFollowScalarFieldEnum = {
 } as const
 
 export type UserFollowScalarFieldEnum = (typeof UserFollowScalarFieldEnum)[keyof typeof UserFollowScalarFieldEnum]
+
+
+export const GithubInstallationScalarFieldEnum = {
+  id: 'id',
+  accountLogin: 'accountLogin',
+  accountType: 'accountType',
+  repositorySelection: 'repositorySelection',
+  suspended: 'suspended',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type GithubInstallationScalarFieldEnum = (typeof GithubInstallationScalarFieldEnum)[keyof typeof GithubInstallationScalarFieldEnum]
+
+
+export const SystemSourceScalarFieldEnum = {
+  id: 'id',
+  slug: 'slug',
+  repoId: 'repoId',
+  repoFullName: 'repoFullName',
+  installationId: 'installationId',
+  branch: 'branch',
+  category: 'category',
+  framework: 'framework',
+  packageManager: 'packageManager',
+  buildConfig: 'buildConfig',
+  setupSql: 'setupSql',
+  lastCommitSha: 'lastCommitSha',
+  lastCommitMessage: 'lastCommitMessage',
+  lastSyncedAt: 'lastSyncedAt',
+  archived: 'archived',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type SystemSourceScalarFieldEnum = (typeof SystemSourceScalarFieldEnum)[keyof typeof SystemSourceScalarFieldEnum]
+
+
+export const SystemEnvVarScalarFieldEnum = {
+  id: 'id',
+  slug: 'slug',
+  key: 'key',
+  valueEnc: 'valueEnc',
+  isSecret: 'isSecret',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type SystemEnvVarScalarFieldEnum = (typeof SystemEnvVarScalarFieldEnum)[keyof typeof SystemEnvVarScalarFieldEnum]
+
+
+export const SystemDeploymentScalarFieldEnum = {
+  id: 'id',
+  slug: 'slug',
+  commitSha: 'commitSha',
+  commitMessage: 'commitMessage',
+  ref: 'ref',
+  status: 'status',
+  trigger: 'trigger',
+  isActive: 'isActive',
+  error: 'error',
+  createdByUserId: 'createdByUserId',
+  queuedAt: 'queuedAt',
+  startedAt: 'startedAt',
+  finishedAt: 'finishedAt'
+} as const
+
+export type SystemDeploymentScalarFieldEnum = (typeof SystemDeploymentScalarFieldEnum)[keyof typeof SystemDeploymentScalarFieldEnum]
+
+
+export const SystemDeploymentOrgScalarFieldEnum = {
+  id: 'id',
+  deploymentId: 'deploymentId',
+  organizationId: 'organizationId',
+  status: 'status',
+  previousSha: 'previousSha',
+  error: 'error',
+  updatedAt: 'updatedAt'
+} as const
+
+export type SystemDeploymentOrgScalarFieldEnum = (typeof SystemDeploymentOrgScalarFieldEnum)[keyof typeof SystemDeploymentOrgScalarFieldEnum]
+
+
+export const DeploymentLogScalarFieldEnum = {
+  id: 'id',
+  deploymentId: 'deploymentId',
+  slug: 'slug',
+  level: 'level',
+  message: 'message',
+  createdAt: 'createdAt'
+} as const
+
+export type DeploymentLogScalarFieldEnum = (typeof DeploymentLogScalarFieldEnum)[keyof typeof DeploymentLogScalarFieldEnum]
+
+
+export const GithubWebhookDeliveryScalarFieldEnum = {
+  id: 'id',
+  event: 'event',
+  repoFullName: 'repoFullName',
+  action: 'action',
+  status: 'status',
+  detail: 'detail',
+  receivedAt: 'receivedAt'
+} as const
+
+export type GithubWebhookDeliveryScalarFieldEnum = (typeof GithubWebhookDeliveryScalarFieldEnum)[keyof typeof GithubWebhookDeliveryScalarFieldEnum]
 
 
 export const SortOrder = {

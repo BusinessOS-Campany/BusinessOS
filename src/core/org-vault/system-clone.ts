@@ -72,7 +72,7 @@ export interface CloneResult {
 // can build its rewrite table from the same list without pulling this module
 // (and its logger) into the config loader. Re-exported here because "which
 // systems can be cloned" is nearly always asked alongside the clone itself.
-export { hasSystemSource, listSystemSources, systemSourceDir } from "./system-sources";
+export { hasSystemSource, listSystemSources, listVendoredSystemSources, systemSourceDir } from "./system-sources";
 
 /** Absolute path of one org's private copy of a system. */
 export function orgSystemDir(paths: OrgVaultPaths, systemSlug: string): string {

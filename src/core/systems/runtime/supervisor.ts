@@ -15,7 +15,7 @@ import type { Dirent } from "node:fs";
 import { appendJsonLine, ensureDir, readJsonFile, systemSourceRoot, writeJsonFile } from "@/core/org-vault/paths";
 import { getVaultEntry, listVaultEntries } from "@/core/org-vault/registry";
 import { ensureOrgDatabase } from "@/core/org-vault/database";
-import { cloneSystemForOrg, orgSystemDir, type CloneResult } from "@/core/org-vault/system-clone";
+import { cloneSystemForOrg, orgSystemDir, systemSourceDir, type CloneResult } from "@/core/org-vault/system-clone";
 import { orgVaultPaths } from "@/core/org-vault/paths";
 import { isBuildCurrent, needsDatabaseSetup, shouldRecheckHealth, canAdoptPersistedRuntime, healthProbeDelays, BOOT_READY_TIMEOUT_MS } from "./build-state";
 import { createBootGate } from "./boot-gate";
@@ -214,7 +214,7 @@ export function hashRuntimeSources(dir: string): string {
  * organization may have installed something deliberately, and a link would
  * silently replace it.
  */
-function linkSharedDependencies(orgDir: string, systemSlug: string): boolean {
+export function linkSharedDependencies(orgDir: string, systemSlug: string): boolean {
   const target = join(orgDir, "node_modules");
   const source = ensureSharedInstall(systemSlug);
   if (!source) return false;
@@ -237,7 +237,7 @@ function ensureSharedInstall(systemSlug: string): string | null {
   const shared = sharedInstallDir(systemSlug);
   if (existsSync(shared)) return shared;
 
-  const master = join(systemSourceRoot(), systemSlug, "node_modules");
+  const master = join(systemSourceDir(systemSlug), "node_modules");
   if (!existsSync(master)) return null;
 
   ensureDir(join(shared, ".."));
@@ -790,7 +790,7 @@ export async function adoptPersistedRuntimes(): Promise<OrgRuntime[]> {
     let slugs: string[];
     try {
       slugs = readdirSync(systemsDir, { withFileTypes: true })
-        .filter((d) => d.isDirectory())
+        .filter((d) => d.isDirectory() && !d.name.startsWith("."))
         .map((d) => d.name);
     } catch {
       continue;

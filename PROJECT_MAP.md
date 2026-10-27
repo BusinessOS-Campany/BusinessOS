@@ -121,6 +121,97 @@ docker-compose.yml        # postgres:18 + pgadmin (redis commented out)
 
 ---
 
+## 2026-10-16 — SYSTEMS CAN BE IMPORTED FROM GITHUB (control plane + admin UI implemented, verified)
+
+Directive: reach a GitHub-powered SaaS shape — connect a GitHub App, import repositories as installable systems, and (later) deploy them on push while preserving the existing per-org clone/runtime model.
+
+**Scope note on numbering:** this work was planned under placeholder labels M13–M18, but the repo **already uses `m13-…m17-` test names for other features** (`m13-unicode`, `m14-custom-domains`, `m15-system-catalog`, `m16/m17-self-service-install`). No milestone IDs were added to the `[MILESTONES]` table; tracking is by feature name in `[ORPHANS & PENDING]` until the owner confirms a numbering scheme.
+
+### Shipped
+
+- **Source resolution now spans two roots.** `src/core/org-vault/paths.ts` gained `managedSystemSourceRoot()` (env `MANAGED_SYSTEM_PATH`, default `<repo>/.systems/`). `systemSourceDir()` searches the vendored `system/<slug>` first, then `.systems/<slug>`; `listVendoredSystemSources()` was split out and `listSystemSources()` now unions both, so the runtime proxy, `next.config.ts` rewrites and the supervisor all see an imported system exactly like a vendored one. `.systems/` is gitignored.
+- **GitHub App module, zero new npm dependencies** (`node:crypto` + `fetch`), in `src/core/github/`:
+  - `auth.ts` — `githubConfig()`, `missingGithubEnv()`, `normalisePem()`, `createAppJwt()` (RS256), `verifyWebhookSignature()` (HMAC-SHA256, timing-safe).
+  - `client.ts` — installation-token cache, `listInstallations`/`getInstallation`/`listRepos`/`getRepo`/`listBranches`/`getCommit`, `githubInstallUrl()`.
+  - `sources.ts` — path/sha/ref validation, `systemCheckoutDir()`, `ensureCheckout()` (spawned `git`, timeout, token masked in logs).
+  - `detect.ts` — framework/package-manager detection + `slugifyRepoName()`.
+  - `service.ts` — `importSystem()` (checkout → detect → `upsertCatalogApp` → `systemSource` upsert → audit), `listGithubSystems()`, archive/branch/refresh, and encrypted env-var CRUD via the existing AES-256-GCM `custom-fields/crypto`.
+- **Schema + migration** `20261016035646_github_system_sources`: `githubInstallation`, `systemSource`, `systemEnvVar`, `systemDeployment`, `systemDeploymentOrg`, `deploymentLog`, `githubWebhookDelivery`. Client regenerated.
+- **Admin API** under `src/app/api/platform/github/`: status/sync, repo+branch browse, import, per-system PATCH/DELETE, env GET/POST/DELETE — all behind `requirePlatformAdmin`.
+- **Admin UI** `src/app/platform-admin/systems/github-systems-section.tsx` (bilingual ar/en, dark/light), rendered under the systems manager: connection state with missing-env report, install/sync buttons, per-system table (repo, branch, commit, contract gate, installed-org count, latest deployment), import dialog (installation → repo → branch → metadata), and an encrypted env-var dialog.
+
+### Design decisions
+
+- Import registers the catalog app **regardless** of the contract, but installability still flows through the single authority `systemContract(slug).missing` / `installSystemForOrg` — a repo that has not yet read `SYSTEM_BASE_PATH` imports and deploys but cannot be installed for an org until it satisfies the contract. Same gate a vendored system passes.
+- A vendored source wins a slug collision over a managed checkout.
+
+### Verified 2026-10-16
+
+- `npm run typecheck` (tsc --noEmit) **clean** repo-wide.
+- `eslint` **clean** on every touched path (`src/core/github`, `src/core/org-vault`, `src/app/api/platform/github`, `src/app/platform-admin`, `src/core/i18n`, the three new tests).
+- `npm test` **808 passed / 3 failed**; the 3 failures are **pre-existing and unrelated** — `demo-mount-paths` + `system-catalog-seed` expect a `clinicos` catalog card and DB seed row that were already missing on a clean tree (no `demo` file was touched by this work; run `npx tsx scripts/seed-full-catalog.ts` to restore the row).
+- `npm run build` (`next build --webpack`) **green**; `/platform-admin/systems` in the route table.
+
+### Not done yet (see `[ORPHANS & PENDING]`)
+
+- ~~No `/api/webhooks/github` endpoint, no deployment queue/worker, so a push does not yet build or activate a version.~~ → delivered the same day; see the next entry.
+- ~~Per-org rollout strategy (and the zero-downtime trade-off) is unbuilt and unconfirmed.~~ → delivered: stage→build→health→promote per org.
+- ~~No GitHub env vars in `.env.example` / setup docs yet.~~ → delivered in `.env.example` and `docs/DEPLOYMENT.md`.
+
+## 2026-10-16 — A PUSH NOW DEPLOYS: WEBHOOK, QUEUE, IN-PROCESS WORKER, PER-ORG STAGED ROLLOUT
+
+Directive (same session as the entry above): finish the delivery half — a signed GitHub `push` must build the system and roll it out to every installed org **without** clobbering the running build. Owner chose the **stage→build→health→promote** rollout and **feature-name** tracking (no new milestone IDs).
+
+### One decision that changed the plan
+
+The original sketch put the worker in `scripts/system-deploy-worker.ts` under pm2. That cannot work: the supervisor's runtime table (`running`) is **in-memory in the platform process**, so a separate process could `stopOrgRuntime` and silently nothing would happen — the platform would keep serving the old child while the new files landed underneath it. The worker therefore runs **in-process**, started from `src/instrumentation.ts` exactly like the existing outbox worker (`src/core/workflows/worker.ts`), and is the only writer that can stop and replace a platform-held runtime. **No `scripts/system-deploy-worker.ts` was created.**
+
+### Shipped
+
+- **Webhook receiver** `src/app/api/webhooks/github/route.ts` — reads the raw body once (re-serialising would break the HMAC), verifies `x-hub-signature-256` with `verifyWebhookSignature`, 503 when `GITHUB_APP_WEBHOOK_SECRET` is unset, 401 on a bad signature, then returns immediately — the build belongs to the worker, not to GitHub's 10s timeout.
+- **`src/core/deploy/webhook.ts`** — routing + delivery dedupe. `push` → resolve `systemSource` by `repo.full_name`, ignore (a) unknown repos, (b) pushes to a non-deploy branch, (c) disconnected (archived) systems, (d) branch deletions (all-zero `after`); otherwise enqueue one deployment with the head-commit message. `ping`/`installation`/`installation_repositories` handled; the delivery id is inserted as a PK **before** any work, so a redelivery returns `duplicate` and rebuilds nothing.
+- **`src/core/deploy/queue.ts`** — `enqueueDeployment` (reuses an in-flight/active row for the same commit), `claimNextDeployment` (claim = `updateMany where status='queued'`; skips a slug that already has a running deployment rather than blocking the queue), status/log/org-row helpers, `recordDelivery`/`finaliseDelivery`, and `requeueStaleDeployments` (returns rows stranded mid-run by a crash to `queued`).
+- **`src/core/deploy/pipeline.ts`** — the pipeline. Canonical stage: `ensureCheckout` at the pushed sha into `.systems/<slug>`, `npm install` there (this is what points the **shared** dependency install at fresh deps), `prisma generate`. Then per org: copy the canonical source into a hidden `.<slug>.staging` folder **inside the org's vault**, link shared deps, `prisma generate` + `npm run build` with the org's own DB/`SYSTEM_BASE_PATH`, **start it on a spare port and health-probe it**, and only then `stopOrgRuntime` → swap `.staging` in (old dir held as `.<slug>.previous`) → `ensureOrgRuntime` (which skips the rebuild because a state file with the matching hash was written). If the new copy fails to start, the previous folder is restored and restarted — per org. A deployment is marked `active` unless **every** org failed.
+- **`src/core/deploy/worker.ts`** — one-deployment-at-a-time polling loop, re-armed by `setTimeout`, drains the queue until empty, reconciles stranded rows once on startup, and never throws out of a pass (a failure is recorded on the deployment row).
+- **Supervisor fixes** `src/core/systems/runtime/supervisor.ts`: `ensureSharedInstall` now links the shared deps from `systemSourceDir(slug)` (it previously joined `systemSourceRoot()/slug`, which is **wrong for GitHub systems** under `.systems/`), and `adoptPersistedRuntimes` skips dot-folders so a leftover `.staging`/`.previous` is never adopted as a live system. `linkSharedDependencies` exported for the pipeline.
+- **Docs** — `.env.example` gained `GITHUB_APP_*` and the managed-source vars; `docs/DEPLOYMENT.md` gained a full **GitHub App** setup section (create App, permissions `Contents: Read`, events `push`/`installation`/`installation_repositories`, webhook URL, PEM handling, import→install→push flow).
+
+### Verified 2026-10-16
+
+- `npm run typecheck` **clean**; `eslint` **clean** on every touched path.
+- New `tests/core/deploy-webhook-queue.test.ts` — **9 tests**: enqueue dedupes an in-flight commit; push to the deploy branch queues; wrong branch / unknown repo / archived system / branch deletion are ignored; redelivered delivery is a no-op; a stranded `building` row is returned to `queued`.
+- `npm test` **817 passed / 3 failed** (was 808/3; +9 new). The 3 failures are the same pre-existing `clinicos` ones (below), no regressions.
+- `npm run build` **green**; `/api/webhooks/github` and `/platform-admin/systems` both in the route table.
+
+### Residual (see `[ORPHANS & PENDING]`)
+
+- Live end-to-end push is **blocked on the owner creating the GitHub App** and setting the four `GITHUB_APP_*` vars.
+- `buildConfig` overrides (`installCommand`/`buildCommand`/`startCommand`/`outputDir`) are detected and stored at import but not yet honoured — the pipeline runs the system's own `npm` scripts, matching the supervisor.
+
+## 2026-10-16 — ROLLBACK TO ANY PAST COMMIT: DEPLOYMENT HISTORY + GUARDED REPLAY (implemented, verified)
+
+Directive (same session; approval gate answered **"Any past commit"**): give the platform admin a first-class way back. The entry above left the queue's `trigger: "rollback"` value defined but issued by nothing.
+
+### Shipped
+
+- **`GET`/`POST` /api/platform/github/systems/[slug]/deployments** — platform-admin only. GET returns the slug's deploy history, newest first, with per-org outcomes. POST takes `{ commitSha }` plus an optional `trigger` (`rollback` by default), queues it, writes a `platform.system.rollback` / `platform.system.redeploy` audit row, and returns 201.
+- **`enqueueReplay` in `src/core/deploy/queue.ts`** — the safety rule lives in the service, not the route: **the sha must already appear in that slug's own deployment history.** An arbitrary sha is refused, so the endpoint cannot be turned into a way to build any commit the App installation can read — "roll back to this" is the only reachable intent. The ref is inherited from the historical row, and `enqueueDeployment`'s dedupe still applies: rolling back to a commit that is already live or in flight returns that deployment instead of queueing a second build. `listDeploymentHistory` backs the GET.
+- **Admin UI** — the GitHub systems card gained a History action per system row opening a deployment-history dialog: sha, commit message, trigger badge, status badge, date, and a "Roll back to this" button on every finished commit **except the one currently live** (rolling back to what is already serving is a no-op, so it gets no button). Clicking it confirms, POSTs, closes, and flashes. Bilingual keys `platform.systems.github.{history,rollbackTitle,current,rollback,confirmRollback,rollbackQueued,noDeployments,trigger*}` added identically to ar and en.
+- **Probe** `scripts/rollback-dialog-check.ts` — seeds a throwaway imported system (one failed commit + one active commit), signs in as a throwaway platform admin, drives Edge headless through row → dialog → click → database, and removes everything it created (the source's cascade deletes the rollback the click queued).
+
+### Verified 2026-10-16
+
+- `npm run typecheck` clean; `eslint` clean on every touched path.
+- `tests/core/deploy-webhook-queue.test.ts` **13 passed** (+4): a rollback queues with `trigger: "rollback"` and the historical ref; an in-flight rollback of the same commit dedupes to one row; a never-deployed sha is refused; history lists newest first.
+- `npm test` **824 passed / 0 failed across 68 files**; `npm run build` green.
+- Headless, twice in a row **14/14** on a sandbox `next start :3110` (live `:3100` untouched, still 200): the page loads for an admin, the dialog opens and lists both commits, **exactly one** Roll back button (none for the live commit), the click queues a real deployment in the database, zero console errors. Two cookie details the probe needs, learned the hard way: the session cookie is named `__Secure-…`, which Chrome rejects unless `secure: true` is set explicitly (localhost counts as a trustworthy origin even on http), and it must be set with `page.setCookie({ url })` rather than a bare domain. The console renders in **Arabic**, so the probe's text assertions are bilingual.
+
+### Residual
+
+- A rollback only has real commits to replay once the GitHub App exists and pushes have run — **still blocked on the owner**, as above.
+- Rate limiting on `/api/platform/*` and the inert `buildConfig` overrides are unchanged; both remain in `[ORPHANS & PENDING]`.
+
+
 ## 2026-10-10 — PHARMACY COULD NOT BE COMMITTED TO GITHUB AT ALL, AND GROCERY'S DEMO IS A FORK NOBODY KNEW ABOUT (implemented, verified)
 
 **The report:** "connect demo system and real system to github so if i want to edit any thing i can commit to github." `system/dental`, `system/grocery` and both demo twins already do this. Pharmacy could not, at all.
@@ -940,6 +1031,42 @@ constraints. A separate decision, not taken unilaterally here.
 ## [ORPHANS & PENDING]
 
 Everything below is NOT YET IMPLEMENTED. Updated continuously; entries removed only when their milestone's verifiable goals pass.
+
+### RESOLVED 2026-10-16 — rollback to any past commit
+
+Shipped and verified the same day (see the "ROLLBACK TO ANY PAST COMMIT" entry above). What closed:
+
+- **Rollback command.** `POST /api/platform/github/systems/[slug]/deployments` with `{ commitSha }` now issues `trigger: "rollback"` (audited, platform-admin only), and the admin console lists each system's deployment history with a **"Roll back to this"** action on every finished commit except the one currently live. The sha is restricted to commits that system has already deployed, so the endpoint cannot build an arbitrary commit. Goal met: an admin can put a previous commit back into service with one click, and a duplicate click while it is in flight builds nothing.
+
+**Still open (unchanged):**
+
+- **`buildConfig` overrides are inert.** Detected + stored at import, but the pipeline uses the system's own `npm` scripts (as the supervisor does), so `installCommand`/`buildCommand`/`startCommand`/`outputDir` are ignored for now.
+- **Live end-to-end push is blocked** until the owner creates the GitHub App and sets `GITHUB_APP_ID`/`GITHUB_APP_PRIVATE_KEY`/`GITHUB_APP_WEBHOOK_SECRET`/`GITHUB_APP_SLUG`. A rollback likewise has no real commits to replay until pushes have run.
+
+### RESOLVED 2026-10-16 — a push now deploys: webhook, queue, worker, staged rollout
+
+Shipped and verified the same day (see the "A PUSH NOW DEPLOYS" entry above). What closed:
+
+- **Webhook endpoint** `POST /api/webhooks/github` — raw-body HMAC verify, delivery dedupe by `githubWebhookDelivery`, `push` → `systemSource` by `repo.fullName` + branch → enqueue. Goal met: a signed push returns 200 and queues exactly one deployment; an unsigned or replayed one is rejected / a no-op.
+- **Deployment queue + worker** — `src/core/deploy/queue.ts` (optimistic `updateMany where status='queued'` claim, busy-slug aware) and `src/core/deploy/worker.ts`. **The worker runs in-process from `instrumentation.ts`, not in `scripts/`** — the supervisor's runtime table is in-process, so only this process can stop and replace a runtime it is serving. The original `scripts/system-deploy-worker.ts` sketch was dropped on that basis.
+- **Per-org rollout** — owner chose **(a) stage→build→health→promote**. Implemented in `src/core/deploy/pipeline.ts`: stage inside the org vault, build with that org's DB + mount, health-probe on a spare port, then swap with the previous folder held aside and restored on failure. Goal met: a failed build never activates a version and the previous one keeps serving.
+
+**Still open:**
+
+- **`buildConfig` overrides are inert.** Detected + stored at import, but the pipeline uses the system's own `npm` scripts (as the supervisor does), so `installCommand`/`buildCommand`/`startCommand`/`outputDir` are ignored for now.
+- **Live end-to-end push is blocked** until the owner creates the GitHub App and sets `GITHUB_APP_ID`/`GITHUB_APP_PRIVATE_KEY`/`GITHUB_APP_WEBHOOK_SECRET`/`GITHUB_APP_SLUG`.
+- ~~Rollback command~~ — **RESOLVED 2026-10-16**, see the block above.
+
+
+### RESOLVED 2026-10-16 — GitHub setup documented, and the three `clinicos` failures are fixed
+
+**Docs (was open):** `.env.example` now carries `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_APP_SLUG` plus `MANAGED_SYSTEM_PATH`/`SYSTEM_SOURCE_PATH`/`ORG_VAULT_PATH`, and `docs/DEPLOYMENT.md` has a **GitHub App** section with the App's exact permissions (`Contents: Read`), events (`push`, `installation`, `installation_repositories`), the webhook URL, PEM/newline handling, and the import→install→push flow. Until all four vars are set, `githubConfig()` is null and every GitHub route reports the missing list — **that is correct behaviour and still blocked on the owner creating the App.**
+
+**`clinicos` (was the only red in the suite):** `demo-systems/clinicos/` and `system/clinicos/` were both on disk and registered in `DEMO_SYSTEMS` (slug `clinicos`, `sourceDir: demo-systems/clinicos`), but two things were never wired to it:
+- No `BUSINESS_SYSTEMS` card, so `demo-mount-paths` failed `expect(card, "clinicos").toBeDefined()` — a repo-hosted app the platform *serves* had no marketplace card, so it would have rendered as "coming soon" on `/demo` despite running. Added the card next to `dental` with `...LIVE("clinicos")` (healthcare, `Stethoscope`), which is the form that derives `route` from the registry's own mount rather than a hand-written path, so a future remount stays correct.
+- No `app` row in the catalog, so `system-catalog-seed` failed on the missing `slug`. Restored with `npx tsx scripts/seed-full-catalog.ts` (idempotent, keyed on slug): `1 created, 5 updated, 191 unchanged`.
+
+Gates after the fix: typecheck clean, eslint clean, **`npm test` 820 passed / 0 failed across 68 files**, `npm run build` green.
 
 ### RESOLVED 2026-10-10 — pharmacy is on GitHub; the abandoned submodule is gone
 

@@ -17,7 +17,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   hasSystemSource,
-  listSystemSources,
+  listVendoredSystemSources,
   systemContract,
   systemSessionCookie,
   systemSourceDir,
@@ -27,7 +27,10 @@ import { installableCardIds } from "@/core/systems/catalog";
 const REPO_ROOT = join(__dirname, "..", "..");
 
 describe("deployed system sources", () => {
-  const sources = listSystemSources();
+  // Vendored only: `listSystemSources()` also reports GitHub-imported sources
+  // under `.systems/`, which are not committed to this repo and so cannot be
+  // held to "what this deployment ships".
+  const sources = listVendoredSystemSources();
 
   it("discovers the grocery and dental masters", () => {
     expect(sources).toContain("grocery");
@@ -155,7 +158,7 @@ describe("system session cookies", () => {
   });
 
   it("gives a name for every system that can be run, so none falls back to a guess", () => {
-    for (const slug of listSystemSources()) {
+    for (const slug of listVendoredSystemSources()) {
       expect(systemSessionCookie(slug), slug).toMatch(/^[A-Za-z0-9_-]+$/);
     }
   });

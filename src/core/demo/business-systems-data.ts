@@ -220,9 +220,10 @@ const LIVE = (slug: string): Pick<BusinessSystem, "status" | "route"> => ({
 });
 
 export const BUSINESS_SYSTEMS: readonly BusinessSystem[] = [
-  // ── Healthcare (10) ──────────────────────────────────────────
+  // ── Healthcare (11) ──────────────────────────────────────────
   { id: "clinic", category: "healthcare", nameAr: "نظام إدارة العيادات", nameEn: "Clinic Management System", descAr: "حل متكامل لإدارة العيادات الحديثة والمواعيد والملفات الطبية.", descEn: "Complete solution for modern clinics, appointments and records.", keywords: "clinic medical عيادة طبي", icon: HeartPulse, ...SOON },
   { id: "dental", category: "healthcare", nameAr: "نظام عيادة الأسنان", nameEn: "Dental Clinic System", descAr: "إدارة المرضى والمواعيد والحشوات والتركيبات والفواتير والمختبر لعيادتك.", descEn: "Patients, appointments, prosthetics, billing and lab.", keywords: "dental teeth أسنان عيادة", icon: SmilePlus, ...LIVE("dental") },
+  { id: "clinicos", category: "healthcare", nameAr: "نظام إدارة العيادات", nameEn: "ClinicOS System", descAr: "إدارة المرضى والمواعيد والفحوصات وقوائم الانتظار والفوترة لعيادتك.", descEn: "Patients, appointments, examinations, waiting list and billing.", keywords: "clinic clinicos عيادة عيادات", icon: Stethoscope, ...LIVE("clinicos") },
   { id: "hospital", category: "healthcare", nameAr: "نظام إدارة المستشفيات", nameEn: "Hospital Management System", descAr: "إدارة المرضى والمواعيد والأسرّة والفواتير والأقسام الطبية.", descEn: "Patients, beds, departments, billing and emergency.", keywords: "hospital مستشفى", icon: Cross, ...SOON },
   { id: "pharmacy", category: "healthcare", nameAr: "نظام إدارة الصيدليات", nameEn: "Pharmacy Management System", descAr: "إدارة الأدوية والمخزون والمنتجات والوصفات الطبية والفواتير لصيدليتك.", descEn: "Medicines, stock, prescriptions, sales and expiry.", keywords: "pharmacy medicine صيدلية دواء", icon: Pill, ...LIVE("pharmacy") },
   { id: "laboratory", category: "healthcare", nameAr: "نظام المختبرات", nameEn: "Laboratory Management System", descAr: "إدارة الفحوصات والعينات والنتائج والأقسام والفواتير لمختبرك الطبي.", descEn: "Tests, samples, results, departments and billing.", keywords: "lab laboratory مختبر فحوصات تحاليل", icon: Microscope, ...SOON },

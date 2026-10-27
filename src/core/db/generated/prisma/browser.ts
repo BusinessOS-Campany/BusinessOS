@@ -433,3 +433,38 @@ export type systemCredential = Prisma.systemCredentialModel
  * Social follow graph between platform users.
  */
 export type userFollow = Prisma.userFollowModel
+/**
+ * Model githubInstallation
+ * One installation of the Business OS GitHub App (an org or a user account).
+ */
+export type githubInstallation = Prisma.githubInstallationModel
+/**
+ * Model systemSource
+ * Binds a catalog system slug to its source repository and deploy settings.
+ */
+export type systemSource = Prisma.systemSourceModel
+/**
+ * Model systemEnvVar
+ * A per-system environment variable, value encrypted at rest.
+ */
+export type systemEnvVar = Prisma.systemEnvVarModel
+/**
+ * Model systemDeployment
+ * One deployment attempt: a commit fetched, built and (maybe) activated.
+ */
+export type systemDeployment = Prisma.systemDeploymentModel
+/**
+ * Model systemDeploymentOrg
+ * Per-org rollout of a deployment. A system deploy fans out to every install.
+ */
+export type systemDeploymentOrg = Prisma.systemDeploymentOrgModel
+/**
+ * Model deploymentLog
+ * Append-only deployment log lines, shown in the admin console.
+ */
+export type deploymentLog = Prisma.deploymentLogModel
+/**
+ * Model githubWebhookDelivery
+ * Dedupe + audit record for every GitHub webhook delivery.
+ */
+export type githubWebhookDelivery = Prisma.githubWebhookDeliveryModel

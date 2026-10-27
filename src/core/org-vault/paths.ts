@@ -82,6 +82,20 @@ export function systemSourceRoot(): string {
   return resolve(configured ? configured : join(process.cwd(), "system"));
 }
 
+/**
+ * Root of system sources imported from GitHub.
+ *
+ * `MANAGED_SYSTEM_PATH` wins; otherwise `.systems/` beside the repo. Kept OUT
+ * of the tracked source tree on purpose: an imported repository is not part of
+ * this repo and must never be committed by the post-commit auto-push hook. The
+ * deployment worker checks a branch out here, and `systemSourceDir()` resolves a
+ * slug against this root when it is not vendored under `system/`.
+ */
+export function managedSystemSourceRoot(): string {
+  const configured = process.env.MANAGED_SYSTEM_PATH?.trim();
+  return resolve(configured ? configured : join(process.cwd(), ".systems"));
+}
+
 export function registryFile(): string {
   return join(registryDir(), "registry.json");
 }

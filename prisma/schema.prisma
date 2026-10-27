@@ -1608,3 +1608,154 @@ model userFollow {
   @@index([followingId])
   @@map("user_follows")
 }
+
+// ── GitHub source integration ──────────────────────────────────────────────
+// GitHub is the source of truth for a system's code. These models bind a
+// catalog `app` to a repository and record every deployment. They are
+// control-plane (platform-wide) tables, not tenant business tables, so — like
+// `app`/`organizationApp` — they may use Prisma relations.
+
+/// One installation of the Business OS GitHub App (an org or a user account).
+model githubInstallation {
+  id                  Int      @id // GitHub's own installation id
+  accountLogin        String   @map("account_login")
+  accountType         String   @map("account_type")
+  /// all | selected — which repos the installation may read.
+  repositorySelection String   @default("all") @map("repository_selection")
+  suspended           Boolean  @default(false)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  systemSources       systemSource[]
+
+  @@map("github_installations")
+}
+
+/// Binds a catalog system slug to its source repository and deploy settings.
+model systemSource {
+  id                String    @id @default(cuid())
+  /// The catalog `app.slug` this source serves. Unique: one repo per system.
+  slug              String    @unique
+  /// GitHub's numeric repo id (a string: it is an opaque identifier, never math).
+  repoId            String?   @map("repo_id")
+  repoFullName      String    @map("repo_full_name")
+  installationId    Int       @map("installation_id")
+  branch            String    @default("main")
+  category          String    @default("business")
+  /// next | vite | node | unknown — detected at import, overridable.
+  framework         String?
+  packageManager    String    @default("npm") @map("package_manager")
+  /// JSON build overrides: { installCommand, buildCommand, startCommand, outputDir }
+  buildConfig       Json      @default("{}") @map("build_config")
+  /// Optional SQL run once against a freshly cloned org database.
+  setupSql          String?   @map("setup_sql")
+  lastCommitSha     String?   @map("last_commit_sha")
+  lastCommitMessage String?   @map("last_commit_message")
+  lastSyncedAt      DateTime? @map("last_synced_at")
+  /// Disconnected systems stop deploying but keep running for installed orgs.
+  archived          Boolean   @default(false)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  installation githubInstallation    @relation(fields: [installationId], references: [id])
+  envVars      systemEnvVar[]
+  deployments  systemDeployment[]
+
+  @@index([installationId])
+  @@index([archived])
+  @@map("system_sources")
+}
+
+/// A per-system environment variable, value encrypted at rest.
+model systemEnvVar {
+  id        String   @id @default(cuid())
+  slug      String   @map("slug")
+  key       String
+  /// AES-256-GCM ciphertext (see core/custom-fields/crypto.ts). Never plaintext.
+  valueEnc  String   @map("value_enc")
+  isSecret  Boolean  @default(true) @map("is_secret")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  source    systemSource @relation(fields: [slug], references: [slug], onDelete: Cascade)
+
+  @@unique([slug, key])
+  @@map("system_env_vars")
+}
+
+/// One deployment attempt: a commit fetched, built and (maybe) activated.
+model systemDeployment {
+  id              String    @id @default(cuid())
+  slug            String    @map("slug")
+  commitSha       String    @map("commit_sha")
+  commitMessage   String?   @map("commit_message")
+  ref             String    @default("main")
+  /// queued|fetching|installing|building|testing|deploying|activating|active|failed|rolled_back|superseded
+  status          String    @default("queued")
+  /// manual | webhook | redeploy | rollback
+  trigger         String    @default("manual")
+  /// True for the single deployment currently serving.
+  isActive        Boolean   @default(false) @map("is_active")
+  error           String?
+  createdByUserId String?   @map("created_by_user_id")
+  queuedAt        DateTime  @default(now()) @map("queued_at")
+  startedAt       DateTime? @map("started_at")
+  finishedAt      DateTime? @map("finished_at")
+
+  source systemSource         @relation(fields: [slug], references: [slug], onDelete: Cascade)
+  logs   deploymentLog[]
+  orgs   systemDeploymentOrg[]
+
+  @@index([slug, queuedAt])
+  @@index([status])
+  @@map("system_deployments")
+}
+
+/// Per-org rollout of a deployment. A system deploy fans out to every install.
+model systemDeploymentOrg {
+  id             String   @id @default(cuid())
+  deploymentId   String   @map("deployment_id")
+  organizationId String   @map("organization_id")
+  /// pending|building|active|failed|skipped
+  status         String   @default("pending")
+  previousSha    String?  @map("previous_sha")
+  error          String?
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deployment     systemDeployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@unique([deploymentId, organizationId])
+  @@index([organizationId])
+  @@map("system_deployment_orgs")
+}
+
+/// Append-only deployment log lines, shown in the admin console.
+model deploymentLog {
+  id           String   @id @default(cuid())
+  deploymentId String?  @map("deployment_id")
+  slug         String   @map("slug")
+  /// info | warn | error
+  level        String   @default("info")
+  message      String
+  createdAt    DateTime @default(now()) @map("created_at")
+  deployment   systemDeployment? @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@index([deploymentId, createdAt])
+  @@index([slug, createdAt])
+  @@map("deployment_logs")
+}
+
+/// Dedupe + audit record for every GitHub webhook delivery.
+model githubWebhookDelivery {
+  /// GitHub's X-GitHub-Delivery header — the primary key is what makes a
+  /// redelivered event a no-op instead of a second deployment.
+  id           String   @id
+  event        String
+  repoFullName String?  @map("repo_full_name")
+  action       String?
+  /// received | ignored | queued | error
+  status       String   @default("received")
+  detail       String?
+  receivedAt   DateTime @default(now()) @map("received_at")
+
+  @@index([repoFullName, receivedAt])
+  @@map("github_webhook_deliveries")
+}
+

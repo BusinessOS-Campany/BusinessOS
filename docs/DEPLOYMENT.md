@@ -100,6 +100,54 @@ repo once held port 3100 while the live site served a 45-second `/windy`.
 | `GROCERY_URL` etc. | No | Demo-system origins (defaults `http://localhost:3101…`) |
 | `ERP_DATABASE_URL` | No | Base URL the grocery app uses to open tenant connections (defaults to `DATABASE_URL`) |
 | `GROCERY_MIGRATIONS_DIR` | No | Migrations source for provisioning `grocery_<slug>` schemas |
+| `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` / `GITHUB_APP_WEBHOOK_SECRET` / `GITHUB_APP_SLUG` | For GitHub deploys | GitHub App credentials (see below); all four required together |
+| `MANAGED_SYSTEM_PATH` | No | Checkout root for GitHub-imported systems (default `./.systems`, gitignored) |
+| `SYSTEM_SOURCE_PATH` | No | Pristine hand-written system masters (default `./system`) |
+| `ORG_VAULT_PATH` | No | Organization vault root (default `./orginazition`) |
+
+## GitHub App
+
+The platform can import a repository as a business system and re-deploy it to
+every organization that has it installed on each push. This needs a GitHub App
+you own; GitHub calls the platform, so no inbound credential is stored.
+
+1. **Create the App** — GitHub → Settings → Developer settings → GitHub Apps →
+   **New GitHub App**.
+   - **Homepage URL**: your platform URL (e.g. `https://bosc.dpdns.org`).
+   - **Webhook URL**: `https://<your-host>/api/webhooks/github`
+   - **Webhook secret**: generate one
+     (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
+     and paste it into `GITHUB_APP_WEBHOOK_SECRET`.
+   - **Repository permissions**: *Contents: Read-only* (the only requirement),
+     plus *Metadata: Read-only* (granted implicitly). Subscribe to **Push**,
+     **Installation**, and **Installation repositories** events.
+   - **Where can this App be installed?**: anywhere you will import from.
+2. **Copy the ids** — on the App's page, note the **App ID**, the **slug**
+   (`github.com/apps/<slug>`), and under *Private keys* → **Generate a private
+   key** (a `.pem` download).
+3. **Fill `.env.local`** (BOM-less UTF-8 — a PowerShell `>` write adds a BOM that
+   silently breaks the parser):
+
+   ```dotenv
+   GITHUB_APP_ID=123456
+   GITHUB_APP_SLUG=your-app-slug
+   GITHUB_APP_WEBHOOK_SECRET=<the secret you set>
+   GITHUB_APP_PRIVATE_KEY=<full PEM, newlines may be literal \n>
+   ```
+4. **Install the App** on the account/org that owns the repositories, granting it
+   the repos you want to import.
+5. **Import**: platform admin → `/platform-admin/systems` → the GitHub card →
+   *Connect* → pick installation → repo → branch → import. The checkout lands in
+   `MANAGED_SYSTEM_PATH/<slug>` and a catalog app is created.
+6. **Install for organizations** as usual, then every push to the configured
+   branch queues a deployment. The in-process deployment worker (started from
+   `src/instrumentation.ts`) fetches the commit, builds a staged copy per org,
+   health-checks it, and only then swaps it in — rolling back if the new copy
+   fails to start.
+
+Verify a push end-to-end with GitHub's **Recent Deliveries** tab (the receiver
+records every delivery in `github_webhook_deliveries` and shows the outcome),
+and watch `deployment_logs` on `/platform-admin/systems`.
 
 ## Production Build
 

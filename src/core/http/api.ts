@@ -143,6 +143,34 @@ export function checkSessionRateLimit(
 }
 
 /**
+ * The caller's address: first hop of `x-forwarded-for`, else the edge header.
+ *
+ * Behind Cloudflare the platform never sees a raw socket address, so this is the
+ * only identity a pre-authentication limit can key on.
+ */
+export function clientIp(request: Request): string {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-real-ip") ||
+    "unknown"
+  );
+}
+
+/**
+ * Per-IP limit for unauthenticated or expensive routes; throws the standard
+ * bilingual 429 when the window is exhausted. Windows are fixed (not sliding)
+ * and the state is in-process — correct for this single-node platform, and the
+ * same primitive the profile routes already use.
+ */
+export function enforceRateLimit(request: Request, key: string, maxRequests: number, windowMs: number): void {
+  const limit = checkSessionRateLimit(`${key}:${clientIp(request)}`, maxRequests, windowMs);
+  if (!limit.allowed) {
+    throw new ApiError(429, "RATE_LIMITED", "محاولات كثيرة، حاول لاحقًا", "Too many requests, slow down");
+  }
+}
+
+/**
  * Wraps an API route handler with: request-id propagation, structured logging,
  * security headers, and a guaranteed error envelope. Stack traces never reach
  * the client.

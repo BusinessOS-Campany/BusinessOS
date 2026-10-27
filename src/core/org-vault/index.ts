@@ -87,6 +87,7 @@ export {
   cloneSystemForOrg,
   hasSystemSource,
   listSystemSources,
+  listVendoredSystemSources,
   orgSystemDir,
   systemSourceDir,
   type CloneResult,

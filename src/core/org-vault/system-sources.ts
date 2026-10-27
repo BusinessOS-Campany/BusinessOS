@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from "node:fs";
 import { join } from "node:path";
-import { systemSourceRoot } from "./paths";
+import { managedSystemSourceRoot, systemSourceRoot } from "./paths";
 
 /**
  * Discovery of the pristine system sources under `system/`.
@@ -29,7 +29,15 @@ const IGNORED_DIRS = new Set([
 
 /** Absolute path of the pristine source for a system slug. */
 export function systemSourceDir(systemSlug: string): string {
-  return join(systemSourceRoot(), systemSlug);
+  // Vendored sources win: `system/<slug>` is the reviewed, in-repo master, and
+  // an imported repo with the same slug must never shadow it.
+  const vendored = join(systemSourceRoot(), systemSlug);
+  if (existsSync(vendored)) return vendored;
+  const managed = join(managedSystemSourceRoot(), systemSlug);
+  if (existsSync(managed)) return managed;
+  // Neither exists: return the vendored location so callers that only build a
+  // path string keep the exact path they had before.
+  return vendored;
 }
 
 /** True when `system/<slug>/` is a system that can be cloned at all. */
@@ -41,24 +49,41 @@ export function hasSystemSource(systemSlug: string): boolean {
   }
 }
 
-/**
- * Every system slug that currently has a pristine source folder, sorted.
- *
- * A directory only counts once it has a `package.json`, so a stray notes folder
- * or a half-copied directory in `system/` cannot become a "system" that an org
- * may then request.
- */
-export function listSystemSources(): string[] {
+/** Directory entries of one source root that look like systems. */
+function listRootSources(root: string): string[] {
   try {
-    return readdirSync(systemSourceRoot(), { withFileTypes: true })
+    return readdirSync(root, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && !IGNORED_DIRS.has(entry.name))
       .map((entry) => entry.name)
-      .filter((name) => existsSync(join(systemSourceRoot(), name, "package.json")))
-      .sort();
+      .filter((name) => existsSync(join(root, name, "package.json")));
   } catch {
-    // No source root yet (fresh checkout, tests with a temp path): no systems.
+    // No root yet (fresh checkout, tests with a temp path): no systems.
     return [];
   }
+}
+
+/**
+ * Every system vendored under `system/<slug>`, sorted.
+ *
+ * Vendored-only on purpose: the deployment-source tests read the real tree to
+ * prove what this repo ships. GitHub-imported sources live in `.systems/` and
+ * are reported by `listSystemSources()` instead.
+ */
+export function listVendoredSystemSources(): string[] {
+  return listRootSources(systemSourceRoot()).sort();
+}
+
+/**
+ * Every system the platform can clone and serve per org, sorted.
+ *
+ * The union of the vendored masters under `system/` and the GitHub-imported
+ * repositories under `.systems/`. This is the list the catalog, install flow
+ * and runtime proxy gate on, so an imported system behaves identically to one
+ * committed to the repo — without a single line of its source being copied in.
+ * Vendored slugs win on collision (see `systemSourceDir`).
+ */
+export function listSystemSources(): string[] {
+  return [...new Set([...listVendoredSystemSources(), ...listRootSources(managedSystemSourceRoot())])].sort();
 }
 
 function readJson(file: string): Record<string, unknown> | null {

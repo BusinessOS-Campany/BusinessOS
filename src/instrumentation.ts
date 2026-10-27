@@ -31,4 +31,11 @@ export async function register(): Promise<void> {
     // A failure to rehydrate must not stop the platform booting; the cold path
     // is always there as the fallback.
   });
+
+  // The deployment worker shares the supervisor's in-memory runtime table, so it
+  // has to run in this process rather than a standalone one. Imported lazily for
+  // the same reason the supervisor is: it drags in child_process and the
+  // filesystem, neither of which exists on the edge runtime.
+  const { startDeploymentWorker } = await import("@/core/deploy/worker");
+  startDeploymentWorker();
 }

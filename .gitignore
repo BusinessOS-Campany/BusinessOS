@@ -46,6 +46,9 @@ next-env.d.ts
 # per-org system clones (customer-owned copies of system/<slug>)
 /orginazition/
 /.system-runtime/
+# GitHub-imported system sources (checked out by the deployment worker; a
+# customer's repository is never committed to this repo).
+/.systems/
 
 .vercel
 .env*

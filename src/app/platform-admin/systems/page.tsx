@@ -1,6 +1,7 @@
 import { getDictAndDir } from "@/core/i18n/server";
 import { getAppCatalog } from "@/core/apps/service";
 import { SystemsManager } from "./systems-manager";
+import { GithubSystemsSection } from "./github-systems-section";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export default async function SystemsPage() {
         </div>
       </header>
       <SystemsManager dict={dict} locale={locale} apps={apps} />
+      <GithubSystemsSection dict={dict} />
     </div>
   );
 }
